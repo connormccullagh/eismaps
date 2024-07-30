@@ -19,7 +19,7 @@ setup(
     packages=find_packages(),
     package_data={'eismaps': ['utils/*.dat']},
     install_requires=[
-        'eispac==0.95.0', # this also covers numpy, sunpy, matplotlib, etc.
+        'eispac==0.96.0', # this also covers numpy, sunpy, matplotlib, etc.
     ],
     classifiers=[
         # license as appropriate
