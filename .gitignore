@@ -1,0 +1,6 @@
+# this is the .gitignore file for the eismaps repository
+
+# ignore the construction directories
+*.egg-info
+*__pycache__
+build/
