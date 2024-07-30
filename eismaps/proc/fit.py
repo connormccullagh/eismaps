@@ -2,6 +2,7 @@ import eispac
 import os
 import sys
 import time
+from eismaps.utils.format import change_line_format
 
 def template_summary():
     eispac_dir = os.path.dirname(eispac.__file__)
@@ -34,27 +35,6 @@ def template_summary():
     print(f"Number of unique lines: {unique_lines}")
 
     return line_templates
-
-def change_line_format(line):
-    # input: e.g. "Fe XIV 264.700" or "S X 258.375" or "Si V 228.375"
-    # output: "fe_14_264_700" or "s__10_258_375" or "si_05_228_375"
-
-    import eismaps.utils.roman_numerals as roman_numerals
-
-    elements, ion, wavelength = line.split()
-    formatted_element = elements.lower()
-
-    if len(formatted_element) == 1:
-        formatted_element += '_'
-
-    formatted_ion = roman_numerals.roman_to_int(ion)
-    formatted_wavelength = wavelength.replace('.', '_')
-
-    # if the formatted ion integer is only one digit, add a zero before
-    if formatted_ion < 10:
-        formatted_ion = f'0{formatted_ion}'
-
-    return f"{formatted_element}_{formatted_ion}_{formatted_wavelength}"
 
 # def batch(files, ncpu='max', save=True, line=None):
 
@@ -126,26 +106,26 @@ def change_line_format(line):
                 
 #             iwin += 1
 
-# def fit_specific_line(file, wininfo_line, iwin, template, ncpu='max', save=True):
-#     # Assuming 'templates' is a list of template files matched for the whole file
-#     # and not for a specific window. You need to filter the relevant templates
-#     # for the window 'wininfo_line'.
-    
-#     cube = eispac.read_cube(file, iwin) # Assuming you have a way to specify the window by line ID
-#     fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
-#     if save:
-#         saved_fit = eispac.save_fit(fit, save_dir=os.path.dirname(file))
-#         print(f"Fit saved to {saved_fit}")
+def fit_specific_line(file, iwin, template, best_match, best_match_index, ncpu='max', save=True, output_dir=None, output_dir_tree=False):
 
-def fit_specific_line(file, iwin, template, best_match, best_match_index, ncpu='max', save=True, output_dir=None):
-    cube = eispac.read_cube(file, iwin)
-    template = eispac.read_template(template)
-    fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
+    if output_dir is None:
+        print('No output directory specified. Saving to the same directory as the input file.')
+        output_dir = os.path.dirname(file)
+    else:
+        if output_dir_tree:
+            file_date = os.path.basename(file).split('.')[0].split('_')[1]
+            output_dir = os.path.join(output_dir, file_date[:4], file_date[4:6], file_date[6:8])
+        os.makedirs(output_dir, exist_ok=True)
 
-    if save:
-        if output_dir is None:
-            print('No output directory specified. Saving to the same directory as the input file.')
-            output_dir = os.path.dirname(file)
+    if save: # if it exists, skip it
+        new_filename = os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{best_match.replace(' ', '_').replace('.','_').lower()}.fit.h5")
+        if os.path.exists(new_filename):
+            print(f"Fit already exists for {best_match}. Skipping.")
+            return
+
+        cube = eispac.read_cube(file, iwin)
+        template = eispac.read_template(template)
+        fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
 
         saved_fits = eispac.save_fit(fit, save_dir=output_dir)
 
@@ -156,20 +136,27 @@ def fit_specific_line(file, iwin, template, best_match, best_match_index, ncpu='
         # loop over all saved fits, delete the unwanted ones, and rename the one we want to keep
         for index, saved_fit in enumerate(saved_fits):
             if index == best_match_index: # this is the fit file we want to keep
-                new_filename = os.path.join(output_dir, f"{os.path.basename(saved_fit).split('.')[0]}.{best_match.replace(' ', '_')}.fit.h5")
                 os.rename(saved_fit, new_filename)
-                print(f"Fit saved to {new_filename}")
+                print(f"Fit saved to {new_filename} (by renaming {saved_fit})")
             else:
                 # delete the unwanted fit files
                 os.remove(saved_fit)
+                print(f"Deleted {saved_fit} as component not needed")
 
-def batch(files, ncpu='max', save=True, output_dir=None, line=None):
+    else:
+        cube = eispac.read_cube(file, iwin)
+        template = eispac.read_template(template)
+        fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
+        print(f"Fit for {best_match} completed, but not saved.")
+
+def batch(files, ncpu='max', save=True, output_dir=None, line=None, output_dir_tree=False):
     ## todo: add a line argument to specify the line to fit, which can include lines not from the list of window names (search through all possible templates and line_ids)
-    for file in files:
+
+    for file in files: # cycle through all the files
         wininfo = eispac.read_wininfo(file)
         templates = eispac.core.match_templates(file) # match templates for the entire file
 
-        for iwin, template_group in enumerate(templates):
+        for iwin, template_group in enumerate(templates): # cycle through the windows in the file
 
           wininfo_ion = wininfo[iwin][1].split()[0] + ' ' + wininfo[iwin][1].split()[1]
           wininfo_wavelength = wininfo[iwin][1].split()[2]
@@ -185,11 +172,10 @@ def batch(files, ncpu='max', save=True, output_dir=None, line=None):
           smallest_offset = float('inf')
           offset_threadhold = 0.15
 
-          for template in template_group:
+          for template in template_group: # cycle through the templates which match the current window
             loaded_template = eispac.read_template(template)
 
-            # iterate over each line_id in the template
-            for line_id_index, line_id in enumerate(loaded_template.template['line_ids']):
+            for line_id_index, line_id in enumerate(loaded_template.template['line_ids']): # cycle through each line in the template
 
               # if the template line_id contains the "unknown" string, skip it
               if 'unknown' in line_id.lower():
@@ -199,7 +185,7 @@ def batch(files, ncpu='max', save=True, output_dir=None, line=None):
               template_ion = line_id.split()[0] + ' ' + line_id.split()[1]
               template_wavelength = line_id.split()[2]
 
-              if template_ion == wininfo_ion:
+              if template_ion.lower() == wininfo_ion.lower():
                 offset = abs(float(template_wavelength) - float(wininfo_wavelength))
                 if offset < smallest_offset:
                   smallest_offset = offset
@@ -207,11 +193,12 @@ def batch(files, ncpu='max', save=True, output_dir=None, line=None):
                     best_match = line_id
                     best_match_index = line_id_index
                     best_template = template
+                    # todo:
                     # if two templates offer good matches, the last one will be chosen
                     # this could be improved by choosing the one with a better fitting template (e.g. if it is closer to the middle of the template region)
 
           if best_match:
             print(f"Found a match for {wininfo[iwin][1]}: {best_match}")
-            fit_specific_line(file, iwin, best_template, best_match, best_match_index, ncpu=ncpu, save=save, output_dir=output_dir)
+            fit_specific_line(file, iwin, best_template, best_match, best_match_index, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
           else:
             print(f"No good match found for {wininfo[iwin][1]}")
