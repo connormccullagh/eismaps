@@ -106,7 +106,6 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
                     line_label = change_line_format(wininfo[iwin]['line_id'])
                 else:
                     # Take the fit name from the template name
-                    print(line_label)
                     line_label = os.path.basename(template_to_fit).split('.')[-4]
 
                 fit_specific_line(file, iwin, template_to_fit, line_label, lock_to_window, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
