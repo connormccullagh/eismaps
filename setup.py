@@ -20,6 +20,7 @@ setup(
     package_data={'eismaps': ['utils/*.dat']},
     install_requires=[
         'eispac==0.96.0', # this also covers numpy, sunpy, matplotlib, etc.
+        'sunkit-image==0.5.1',
     ],
     classifiers=[
         # license as appropriate
