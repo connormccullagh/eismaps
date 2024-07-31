@@ -3,7 +3,7 @@ import os
 import eismaps.utils.roman_numerals as roman_numerals
 from eismaps.utils.format import change_line_format
 
-def fit_specific_line(file, iwin, template, line_label, ncpu='max', save=True, output_dir=None, output_dir_tree=False):
+def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='max', save=True, output_dir=None, output_dir_tree=False):
     # Determine the output directory
     if output_dir is None:
         print('No output directory specified. Saving to the same directory as the input file.')
@@ -34,14 +34,27 @@ def fit_specific_line(file, iwin, template, line_label, ncpu='max', save=True, o
         if not isinstance(saved_fits, list):
             saved_fits = [saved_fits]
 
-        # Loop over all saved fits, delete the unwanted ones, and rename the one we want to keep
-        for saved_fit in saved_fits:
-            if line_label in os.path.basename(saved_fit):
-                os.rename(saved_fit, new_filename)
-                print(f"Fit saved to {new_filename} (by renaming {saved_fit})")
-            else:
-                os.remove(saved_fit)
-                print(f"Deleted {saved_fit} as component not needed")
+        # If lock_to_window is True, keep only one file and rename it
+        if lock_to_window:  ### TODO: Optimise selection ###
+
+            os.rename(saved_fits[0], new_filename)
+            print(f"Fit saved to {new_filename} (by renaming {saved_fits[0]})")
+
+            if len(saved_fits) > 1:
+                for saved_fit in saved_fits[1:]:
+                    os.remove(saved_fit)
+                    print(f"Deleted {saved_fit} as component not needed")
+
+        else:
+
+            # Loop over all saved fits, delete the unwanted ones, and rename the one we want to keep
+            for saved_fit in saved_fits:
+                if line_label in os.path.basename(saved_fit):
+                    os.rename(saved_fit, new_filename)
+                    print(f"Fit saved to {new_filename} (by renaming {saved_fit})")
+                else:
+                    os.remove(saved_fit)
+                    print(f"Deleted {saved_fit} as component not needed")
 
     else:
         print(f"Fit for {line_label} complete but not saved.")
@@ -61,18 +74,18 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
             if lock_to_window:  # If the lock_to_window flag is set, only fit one component per window (named after the windows)
 
                 # If there is a template with 1 component, use that
-                if any('1c' in template for template in template_group):
+                if any('1c' in template.name for template in template_group):
                     for template in template_group:
-                        if template.split('.')[-3].replace('c', '') == '1':
+                        if template.name.split('.')[-3].replace('c', '') == '1':
                             templates_to_fit.append(template)
                             break
                             ### TODO: If more than one template has 1 component, optimise selection ###
+                else:
+                    # Otherwise just choose the first template
+                    templates_to_fit.append(template_group[0])
+                    ### TODO: Optimise selection ###
 
-                # Otherwise just choose the first template
-                templates_to_fit.append(template_group[0])
-                ### TODO: Optimise selection ###
-
-                assert len(templates_to_fit) == 1, f"More than one template selected for window {iwin} with lock_to_window=True"
+                assert len(templates_to_fit) == 1, f"More than one template selected when lock_to_window=True."
 
             else:  # Fit as many lines as possible
 
@@ -93,6 +106,7 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
                     line_label = change_line_format(wininfo[iwin]['line_id'])
                 else:
                     # Take the fit name from the template name
+                    print(line_label)
                     line_label = os.path.basename(template_to_fit).split('.')[-4]
 
-                fit_specific_line(file, iwin, template_to_fit, line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                fit_specific_line(file, iwin, template_to_fit, line_label, lock_to_window, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
