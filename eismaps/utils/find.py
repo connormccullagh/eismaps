@@ -30,9 +30,5 @@ def main(ext, dir, unique_times=False):
                 else:
                     collected_files.append(os.path.join(root, file))
 
-    if len(collected_files) == 0:
-        print(f'No {ext} files found in {dir}. Returning None.')
-        return None
-
     collected_files.sort()
     return collected_files
