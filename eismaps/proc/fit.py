@@ -16,14 +16,31 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
         os.makedirs(output_dir, exist_ok=True)
 
     # Check if the fit already exists
-    new_filename = os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line_label.replace(' ', '_').replace('.', '_').lower()}.fit.h5")
-    if save and os.path.exists(new_filename):
-        print(f"Fit already exists for {line_label}. Skipping.")
+    new_filename_window = os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line_label.replace(' ', '_').replace('.', '_').lower()}.fit.h5")
+    if save and lock_to_window and os.path.exists(new_filename_window):
+        print(f"Fit already exists for {line_label} and using lock_to_window so skipping.")
         return
 
     # Read the data cube and the template
     cube = eispac.read_cube(file, iwin)
     template = eispac.read_template(template)
+
+    # Check whether all the lines in the template have already been fitted
+    template_lines = template.template['line_ids']
+    template_lines = [change_line_format(line) for line in template_lines]
+    print(f"Template lines: {template_lines}")
+
+    if save:
+        # for line in template_lines:
+        #     if os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")):
+        #         print(f"Fit already exists for {line} so skipping.")
+        #         return
+
+        # if all the lines in the template have already been fitted, skip
+        if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in template_lines]):
+            print(f"All lines in the template have already been fitted. Skipping.")
+            return
+
     fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
 
     if save:
@@ -37,8 +54,8 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
         # If lock_to_window is True, keep only one file and rename it
         if lock_to_window:  ### TODO: Optimise selection ###
 
-            os.rename(saved_fits[0], new_filename)
-            print(f"Fit saved to {new_filename} (by renaming {saved_fits[0]})")
+            os.rename(saved_fits[0], new_filename_window)
+            print(f"Fit saved to {new_filename_window} (by renaming {saved_fits[0]})")
 
             if len(saved_fits) > 1:
                 for saved_fit in saved_fits[1:]:
@@ -49,12 +66,14 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
 
             # Loop over all saved fits, delete the unwanted ones, and rename the one we want to keep
             for saved_fit in saved_fits:
-                if line_label in os.path.basename(saved_fit):
-                    os.rename(saved_fit, new_filename)
-                    print(f"Fit saved to {new_filename} (by renaming {saved_fit})")
+
+                # Convert e.g. eis_20130116_093720.al_09_284_015.2c-0.fit.h5 to eis_20130116_093720.al_09_284_015.fit.h5
+                new_filename_line = os.path.join(os.path.dirname(saved_fit), os.path.basename(saved_fit).split('.')[0]+'.'+os.path.basename(saved_fit).split('.')[1]+'.'+os.path.basename(saved_fit).split('.')[3]+'.'+os.path.basename(saved_fit).split('.')[4])
+                if not os.path.exists(new_filename_line):
+                    os.rename(saved_fit, new_filename_line)
                 else:
                     os.remove(saved_fit)
-                    print(f"Deleted {saved_fit} as component not needed")
+                    print(f"{saved_fit} not renamed to {new_filename_line} as file already exists")
 
     else:
         print(f"Fit for {line_label} complete but not saved.")
