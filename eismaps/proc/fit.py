@@ -51,6 +51,12 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
         if not isinstance(saved_fits, list):
             saved_fits = [saved_fits]
 
+        # if any of the saved fits contain "unknown", delete them
+        for saved_fit in saved_fits:
+            if "unknown" in saved_fit:
+                os.remove(saved_fit)
+                print(f"Deleted {saved_fit} as it contains 'unknown'")
+
         # If lock_to_window is True, keep only one file and rename it
         if lock_to_window:  ### TODO: Optimise selection ###
 
