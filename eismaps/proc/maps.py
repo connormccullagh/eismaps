@@ -22,7 +22,7 @@ def map_sd_filter(map,stds=3,log=False):
 
     return map
     
-def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, output_dir=None, output_dir_tree=False, vel_los_correct=False, skip_done=True):
+def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, output_dir=None, output_dir_tree=False, vel_los_correct=False, skip_done=True, mssl_solarb_file_format=False):
 
     if not save_fit and not save_plot: print("No output specified. Exiting."); return False
     VALID_MEASUREMENTS = ['int', 'vel', 'wid', 'ntv']
@@ -48,7 +48,14 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                 if skip_done and os.path.exists(output_file_fit): print(f"Skipping {m} map for {file_name} because it already exists."); continue
 
             if save_plot:
-                output_file_png = os.path.join(output_dir, f"{file_name.replace('.fit.h5', f'.{m}.png')}")
+                output_file_png = os.path.join(output_dir, f"{file_name.replace('.fit.h5', f'.{m}.png')}")  # Example output: eis_20130113_074850.fe_15_284_160.int.png
+                if mssl_solarb_file_format: # Example required: eis_l0_20130113_074850.fits_line_10_FE_XV_284.160.int.gif
+                    output_file_png_filename = os.path.basename(output_file_png)
+                    output_file_datetime = f"{output_file_png_filename.split('.')[0].split('_')[1]}_{output_file_png_filename.split('.')[0].split('_')[2]}"
+                    output_file_iwin = fit_res.meta['iwin']
+                    output_file_lineid = fit_res.meta['line_id']
+                    output_file_gif_filename = f"eis_l0_{output_file_datetime}.fits_line_{output_file_iwin}_{output_file_lineid.replace(' ', '_').upper()}.{m}.gif"
+                    output_file_gif = os.path.join(output_dir, output_file_gif_filename)
                 if skip_done and os.path.exists(output_file_fit): print(f"Skipping {m} map for {file_name} because it already exists."); continue
 
             if m == 'ntv': # not an eispac default, so need eismaps
@@ -95,7 +102,10 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                     m_map.plot_settings['norm'].vmin = 1e-1
                     m_map.plot()
                     plt.colorbar(label='Intensity (DN/s)', extend='max')
-                    plt.savefig(output_file_png)
+                    if mssl_solarb_file_format:
+                        plt.savefig(output_file_gif, dpi=100)
+                    else:
+                        plt.savefig(output_file_png)
                     plt.close()
                 if m == 'vel':
                     plt.figure()
@@ -110,7 +120,10 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                     m_map.plot_settings['norm'].vmax = vmax
                     m_map.plot()
                     plt.colorbar(label='Doppler velocity (km/s)', extend='both')
-                    plt.savefig(output_file_png)
+                    if mssl_solarb_file_format:
+                        plt.savefig(output_file_gif, dpi=100)
+                    else:
+                        plt.savefig(output_file_png)
                     plt.close()
                 if m == 'wid':
                     plt.figure()
@@ -119,7 +132,10 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                     m_map.plot_settings['cmap'] = m_cmap
                     m_map.plot()
                     plt.colorbar(label='Width (Angstrom)', extend='both')
-                    plt.savefig(output_file_png)
+                    if mssl_solarb_file_format:
+                        plt.savefig(output_file_gif, dpi=100)
+                    else:
+                        plt.savefig(output_file_png)
                     plt.close()
                 if m == 'ntv':
                     plt.figure()
@@ -131,7 +147,10 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                     m_map.plot_settings['norm'].vmax = vmax_percentile
                     m_map.plot()
                     plt.colorbar(label='Non-thermal velocity (km/s)', extend='both')
-                    plt.savefig(output_file_png)
+                    if mssl_solarb_file_format:
+                        plt.savefig(output_file_gif, dpi=100)
+                    else:
+                        plt.savefig(output_file_png)
                     plt.close()
 
     return
