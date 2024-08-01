@@ -51,12 +51,6 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
         if not isinstance(saved_fits, list):
             saved_fits = [saved_fits]
 
-        # if any of the saved fits contain "unknown", delete them
-        for saved_fit in saved_fits:
-            if "unknown" in saved_fit:
-                os.remove(saved_fit)
-                print(f"Deleted {saved_fit} as it contains 'unknown'")
-
         # If lock_to_window is True, keep only one file and rename it
         if lock_to_window:  ### TODO: Optimise selection ###
 
@@ -72,6 +66,12 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
 
             # Loop over all saved fits, delete the unwanted ones, and rename the one we want to keep
             for saved_fit in saved_fits:
+
+                # if any of the saved fits contain "unknown", delete them
+                if "unknown" in saved_fit:
+                    os.remove(saved_fit)
+                    print(f"Deleted {saved_fit} as it contains 'unknown'")
+                    continue
 
                 # Convert e.g. eis_20130116_093720.al_09_284_015.2c-0.fit.h5 to eis_20130116_093720.al_09_284_015.fit.h5
                 new_filename_line = os.path.join(os.path.dirname(saved_fit), os.path.basename(saved_fit).split('.')[0]+'.'+os.path.basename(saved_fit).split('.')[1]+'.'+os.path.basename(saved_fit).split('.')[3]+'.'+os.path.basename(saved_fit).split('.')[4])
