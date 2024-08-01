@@ -62,7 +62,7 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                 if m == 'wid': m_map = map_sd_filter(m_map, stds=3)
                 if m == 'ntv': m_map = map_sd_filter(m_map, stds=3)
 
-            if vel_los_correct:
+            if vel_los_correct and m == 'vel':
                 helioprojective_coords = sunpy.map.all_coordinates_from_map(m_map)
                 heliographic_coords = helioprojective_coords.transform_to(frames.HeliographicStonyhurst)
                 latitude = heliographic_coords.lat.to(u.deg).value
@@ -79,10 +79,9 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                 los_factor = np.sin(latitude_rad) * np.sin(observer_lat_rad) + \
                             np.cos(latitude_rad) * np.cos(observer_lat_rad) * np.cos(longitude_rad - observer_lon_rad)
 
-                m_map_data = np.zeros(m_map.data.shape)
-                assert los_factor.shape == m_map.data.shape, f"los_factor shape {los_factor.shape} does not match map data shape {m_map.data.shape}."
-                m_map_data = m_map.data / los_factor
-                m_map = sunpy.map.Map(m_map_data, m_map.meta)
+                for i in range(m_map.data.shape[0]):
+                    for j in range(m_map.data.shape[1]):
+                            m_map.data[i,j] = m_map.data[i,j] / los_factor[i,j]
 
             if save_fit:
                 m_map.save(output_file_fit, overwrite=True)
@@ -137,16 +136,16 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
 
     return
 
-def get_ntv_map(fit_res, main_component=None):
+def get_ntv_map(fit_res, component=None):
     import pandas as pd
     from eismaps.utils.roman_numerals import int_to_roman, roman_to_int
     import numpy as np
     import sunpy.map
     import eismaps.utils.width2velocity
 
-    if main_component is None: main_component = fit_res.fit['main_component']
+    if component is None: component = fit_res.fit['main_component']
 
-    map_wid = fit_res.get_map(component=main_component,measurement='wid')
+    map_wid = fit_res.get_map(component=component,measurement='wid')
 
     yy = map_wid.data.shape[0]
     xx = map_wid.data.shape[1]
