@@ -137,6 +137,7 @@ def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, out
                 if lock_to_window:
                     # Take the fit name from the window name
                     line_label = change_line_format(wininfo[iwin]['line_id'])
+                    fit_specific_line(file, iwin, template_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
                 if list_lines_only:
                     template_to_fit_template = eispac.read_template(template_to_fit)
@@ -147,7 +148,7 @@ def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, out
                             all_possible_lines.append(template_line)
 
                 else:
-                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
     if list_lines_only:
         return all_possible_lines
