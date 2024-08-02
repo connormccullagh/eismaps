@@ -3,7 +3,7 @@ import os
 import eismaps.utils.roman_numerals as roman_numerals
 from eismaps.utils.format import change_line_format
 
-def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='max', save=True, output_dir=None, output_dir_tree=False):
+def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='max', save=True, ignore_unknown=True, output_dir=None, output_dir_tree=False):
     # Determine the output directory
     if output_dir is None:
         print('No output directory specified. Saving to the same directory as the input file.')
@@ -61,7 +61,7 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
             for saved_fit in saved_fits:
 
                 # if any of the saved fits contain "unknown", delete them
-                if "unknown" in str(saved_fit):
+                if "unknown" in str(saved_fit) and ignore_unknown:
                     os.remove(saved_fit)
                     print(f"Deleted {saved_fit} as it contains 'unknown'")
                     continue
