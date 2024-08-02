@@ -31,11 +31,6 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
     print(f"Template lines: {template_lines}")
 
     if save:
-        # for line in template_lines:
-        #     if os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")):
-        #         print(f"Fit already exists for {line} so skipping.")
-        #         return
-
         # if all the lines in the template have already been fitted, skip
         if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in template_lines]):
             print(f"All lines in the template have already been fitted. Skipping.")
@@ -46,10 +41,8 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
     if save:
         # Save the fit result
         saved_fits = eispac.save_fit(fit, save_dir=output_dir)
-
-        # Ensure saved_fits is a list even if only one file is returned
-        if not isinstance(saved_fits, list):
-            saved_fits = [saved_fits]
+        if not isinstance(saved_fits, list): saved_fits = [saved_fits]  # Ensure saved_fits is a list even if only one file is returned
+        saved_fits = [str(f) for f in saved_fits]  # Turn the pathlib.PosixPath objects into strings
 
         # If lock_to_window is True, keep only one file and rename it
         if lock_to_window:  ### TODO: Optimise selection ###
@@ -68,7 +61,7 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
             for saved_fit in saved_fits:
 
                 # if any of the saved fits contain "unknown", delete them
-                if "unknown" in saved_fit:
+                if "unknown" in str(saved_fit):
                     os.remove(saved_fit)
                     print(f"Deleted {saved_fit} as it contains 'unknown'")
                     continue
