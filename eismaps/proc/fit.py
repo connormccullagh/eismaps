@@ -3,7 +3,7 @@ import os
 import eismaps.utils.roman_numerals as roman_numerals
 from eismaps.utils.format import change_line_format
 
-def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='max', save=True, ignore_unknown=True, output_dir=None, output_dir_tree=False):
+def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=False, line_label=None, ncpu='max', save=True, ignore_unknown=True, output_dir=None, output_dir_tree=False):
     # Determine the output directory
     if output_dir is None:
         print('No output directory specified. Saving to the same directory as the input file.')
@@ -15,11 +15,12 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
             output_dir = os.path.join(output_dir, file_date[:4], file_date[4:6], file_date[6:8])
         os.makedirs(output_dir, exist_ok=True)
 
-    # Check if the fit already exists
-    new_filename_window = os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line_label.replace(' ', '_').replace('.', '_').lower()}.fit.h5")
-    if save and lock_to_window and os.path.exists(new_filename_window):
-        print(f"Fit already exists for {line_label} and using lock_to_window so skipping.")
-        return
+    # Check if the fit already exists when locked to windows
+    if save and lock_to_window:
+        new_filename_window = os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line_label.replace(' ', '_').replace('.', '_').lower()}.fit.h5")
+        if os.path.exists(new_filename_window):
+            print(f"Fit already exists for {line_label} and using lock_to_window so skipping.")
+            return
 
     # Read the data cube and the template
     cube = eispac.read_cube(file, iwin)
@@ -35,6 +36,12 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
         if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in template_lines]):
             print(f"All lines in the template have already been fitted. Skipping.")
             return
+
+        # if none of the lines in the template are in the list of lines to fit, skip
+        if lines_to_fit != 'all':
+            if all([line not in lines_to_fit for line in template_lines]):
+                print(f"None of the lines in the template are in the list of lines to fit. Skipping.")
+                return
 
     fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
 
@@ -66,6 +73,13 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
                     print(f"Deleted {saved_fit} as it contains 'unknown'")
                     continue
 
+                # if it isn't a line to fit, delete it
+                if lines_to_fit != 'all':
+                    if change_line_format(os.path.basename(saved_fit).split('.')[1]) not in lines_to_fit:
+                        os.remove(saved_fit)
+                        print(f"Deleted {saved_fit} as it is not in the list of lines to fit")
+                        continue
+
                 # Convert e.g. eis_20130116_093720.al_09_284_015.2c-0.fit.h5 to eis_20130116_093720.al_09_284_015.fit.h5
                 new_filename_line = os.path.join(os.path.dirname(saved_fit), os.path.basename(saved_fit).split('.')[0]+'.'+os.path.basename(saved_fit).split('.')[1]+'.'+os.path.basename(saved_fit).split('.')[3]+'.'+os.path.basename(saved_fit).split('.')[4])
                 if not os.path.exists(new_filename_line):
@@ -75,9 +89,9 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
                     print(f"{saved_fit} not renamed to {new_filename_line} as file already exists")
 
     else:
-        print(f"Fit for {line_label} complete but not saved.")
+        print(f"Fit complete but not saved.")
 
-def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, lock_to_window=False, list_lines_only=False):
+def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, output_dir_tree=False, lock_to_window=False, list_lines_only=False):
     all_possible_lines = []
     for file in files:  # Cycle through all the files
         wininfo = eispac.read_wininfo(file)
@@ -123,9 +137,6 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
                 if lock_to_window:
                     # Take the fit name from the window name
                     line_label = change_line_format(wininfo[iwin]['line_id'])
-                else:
-                    # Take the fit name from the template name
-                    line_label = os.path.basename(template_to_fit).split('.')[-4]
 
                 if list_lines_only:
                     template_to_fit_template = eispac.read_template(template_to_fit)
@@ -134,9 +145,9 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
                     for template_line in template_lines:
                         if template_line not in all_possible_lines:
                             all_possible_lines.append(template_line)
-                    
+
                 else:
-                    fit_specific_line(file, iwin, template_to_fit, line_label, lock_to_window, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
     if list_lines_only:
         return all_possible_lines
