@@ -36,6 +36,12 @@ def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=F
         if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in template_lines]):
             print(f"All lines in the template have already been fitted. Skipping.")
             return
+        
+        # if all the lines_to_fit have already been fitted, skip
+        if lines_to_fit != 'all':
+            if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in lines_to_fit]):
+                print(f"All lines in the list of lines to fit have already been fitted. Skipping.")
+                return
 
         # if none of the lines in the template are in the list of lines to fit, skip
         if lines_to_fit != 'all':
@@ -75,7 +81,7 @@ def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=F
 
                 # if it isn't a line to fit, delete it
                 if lines_to_fit != 'all':
-                    if change_line_format(os.path.basename(saved_fit).split('.')[1]) not in lines_to_fit:
+                    if os.path.basename(saved_fit).split('.')[1] not in lines_to_fit:
                         os.remove(saved_fit)
                         print(f"Deleted {saved_fit} as it is not in the list of lines to fit")
                         continue
@@ -133,11 +139,6 @@ def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, out
                         templates_to_fit.append(template)
 
             for template_to_fit in templates_to_fit:  # Cycle through the templates to fit
-                
-                if lock_to_window:
-                    # Take the fit name from the window name
-                    line_label = change_line_format(wininfo[iwin]['line_id'])
-                    fit_specific_line(file, iwin, template_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
                 if list_lines_only:
                     template_to_fit_template = eispac.read_template(template_to_fit)
@@ -147,8 +148,13 @@ def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, out
                         if template_line not in all_possible_lines:
                             all_possible_lines.append(template_line)
 
+                elif lock_to_window:
+                    # Take the fit name from the window name
+                    line_label = change_line_format(wininfo[iwin]['line_id'])
+                    fit_specific_line(file, iwin, template_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+
                 else:
-                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
     if list_lines_only:
         return all_possible_lines
