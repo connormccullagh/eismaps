@@ -128,8 +128,8 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
                     line_label = os.path.basename(template_to_fit).split('.')[-4]
 
                 if list_lines_only:
-                    template = eispac.read_template(template)
-                    template_lines = template.template['line_ids']
+                    template_to_fit_template = eispac.read_template(template_to_fit)
+                    template_lines = template_to_fit_template.template['line_ids']
                     template_lines = [change_line_format(line) for line in template_lines]
                     for template_line in template_lines:
                         if template_line not in all_possible_lines:
