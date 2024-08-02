@@ -77,7 +77,8 @@ def fit_specific_line(file, iwin, template, line_label, lock_to_window, ncpu='ma
     else:
         print(f"Fit for {line_label} complete but not saved.")
 
-def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, lock_to_window=False):
+def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, lock_to_window=False, list_lines_only=False):
+    all_possible_lines = []
     for file in files:  # Cycle through all the files
         wininfo = eispac.read_wininfo(file)
         templates = eispac.core.match_templates(file)  # Match templates for the entire file
@@ -126,4 +127,16 @@ def batch(files, ncpu='max', save=True, output_dir=None, output_dir_tree=False, 
                     # Take the fit name from the template name
                     line_label = os.path.basename(template_to_fit).split('.')[-4]
 
-                fit_specific_line(file, iwin, template_to_fit, line_label, lock_to_window, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                if list_lines_only:
+                    template = eispac.read_template(template)
+                    template_lines = template.template['line_ids']
+                    template_lines = [change_line_format(line) for line in template_lines]
+                    for template_line in template_lines:
+                        if template_line not in all_possible_lines:
+                            all_possible_lines.append(template_line)
+                    
+                else:
+                    fit_specific_line(file, iwin, template_to_fit, line_label, lock_to_window, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+
+    if list_lines_only:
+        return all_possible_lines
