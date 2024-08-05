@@ -14,20 +14,32 @@ from sunpy.coordinates.frames import Helioprojective
 import sunpy.sun.constants
 from sunpy.physics.differential_rotation import solar_rotate_coordinate
 from sunpy.coordinates import Helioprojective, propagate_with_solar_surface, RotatedSunFrame
+from sunpy.coordinates import SphericalScreen
 
-def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, preserve_limb=False, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
+def safe_load_map(map_file):
+    try:
+        map = sunpy.map.Map(map_file)
+    except:
+        print(f"Error loading map {map_file}. Skipping.")
+        map = None
+    return map
+
+def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, preserve_limb=None, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
     """
     Make a helioprojective full disk map from a list of maps.
     """
 
-    first_map = sunpy.map.Map(map_files[0])
+    first_map = safe_load_map(map_files[0])
+    if first_map is None:
+        return
 
-    fd_size = 0  # Determine the full disk grid size
-    for file in map_files:
-        map = sunpy.map.Map(file)
-        fd_size = max(fd_size, (abs(map.meta['xcen']) + (map.meta['fovx'] / 2)) * 2)
-        fd_size = max(fd_size, (abs(map.meta['ycen']) + (map.meta['fovy'] / 2)) * 2)
-    fd_size = int(fd_size * 1.05)  # Add some padding
+    # fd_size = 0  # Determine the full disk grid size
+    # for file in map_files:
+    #     map = sunpy.map.Map(file)
+    #     fd_size = max(fd_size, (abs(map.meta['xcen']) + (map.meta['fovx'] / 2)) * 2)
+    #     fd_size = max(fd_size, (abs(map.meta['ycen']) + (map.meta['fovy'] / 2)) * 2)
+    # fd_size = int(fd_size * 1.05)  # Add some padding
+    fd_size = 3500  # Hardcoded
 
     map_dx = first_map.meta['cdelt1']  # Pixel sizes for the full disk image
     map_dy = first_map.meta['cdelt2']
@@ -61,7 +73,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
 
         map = sunpy.map.Map(map_file)
 
-        if preserve_limb:  # Manually drag rasters (and don't distort) with a custom point
+        if preserve_limb=='drag':  # Manually drag rasters (and don't distort) with a custom point
 
             def differental_rotate_map_by_drag(map, point):
                 # Calculate the time difference between the map and the first map
@@ -88,6 +100,13 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
                 map = differental_rotate_map_by_drag(map, closest_coords)
             else: # This map is completely on disk, so can be shifted as normal
                 map = differental_rotate_map_by_drag(map, map.center)
+
+        elif preserve_limb=='spherical_screen':
+
+            # Apply differential rotation to the map, compared to the time of the fd_map
+            with propagate_with_solar_surface():
+                with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                    map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
         else:
 
@@ -157,7 +176,9 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, d
     Make a Carrington full disk map from a list of maps.
     """
 
-    first_map = sunpy.map.Map(map_files[0])
+    first_map = safe_load_map(map_files[0])
+    if first_map is None:
+        return
     
     lon_pixels = int(360 / deg_per_pix)
     lat_pixels = int(180 / deg_per_pix)
