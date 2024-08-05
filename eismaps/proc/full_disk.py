@@ -29,7 +29,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     Make a helioprojective full disk map from a list of maps.
     """
     if preserve_limb == 'drag':
-        print('Warning: Dragging rasters is not yet implemented for helioprojective maps. Using spherical screen instead.')
+        print('Warning: Dragging rasters is depreciated for helioprojective maps. Using spherical screen instead.')
         preserve_limb='spherical_screen'
 
     first_map = safe_load_map(map_files[0])
@@ -144,7 +144,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     if save_fit:
 
         map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
-        fd_map.save(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd.fits"), overwrite=True)
+        fd_map.save(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_hp.fits"), overwrite=True)
 
     if save_plot:
         
@@ -154,7 +154,6 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         if measurement == 'int':
             fd_map.plot_settings['norm'] = LogNorm(vmin=1e1, vmax=5e3)
             im = fd_map.plot(cmap='gist_heat')
-            fd_map.draw_limb(axes=ax, color="k")
         elif measurement == 'vel':
             im = fd_map.plot(cmap='RdBu_r')
             im.set_norm(plt.Normalize(vmin=-10, vmax=10))
@@ -170,6 +169,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         else:
             raise ValueError('Error: measurement is not valid')
         
+        fd_map.draw_limb(axes=ax, color="k")
         im = ax.get_images()
         im_lims = im[0].get_extent()
         ax.set_aspect(abs((im_lims[1]-im_lims[0])/(im_lims[3]-im_lims[2])))
@@ -246,7 +246,7 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, d
     if save_fit:
 
         map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
-        fd_map.save(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd.fits"), overwrite=True)
+        fd_map.save(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_ca.fits"), overwrite=True)
 
     if save_plot:
 
@@ -256,7 +256,6 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, d
         if measurement == 'int':
             fd_map.plot_settings['norm'] = LogNorm(vmin=1e1, vmax=5e3)
             im = fd_map.plot(cmap='gist_heat')
-            fd_map.draw_limb(axes=ax, color="k")
         elif measurement == 'vel':
             im = fd_map.plot(cmap='RdBu_r')
             im.set_norm(plt.Normalize(vmin=-10, vmax=10))
@@ -278,3 +277,5 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, d
         plt.colorbar(extend='both')
         plt.savefig(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_ca.{plot_ext}"), dpi=plot_dpi)
         plt.close()
+
+    return fd_map
