@@ -185,7 +185,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
 
     return fd_map
 
-def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, deg_per_pix=0.1, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
+def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, deg_per_pix=0.1, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
     """
     Make a Carrington full disk map from a list of maps.
     """
@@ -228,7 +228,8 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, d
 
         # Change the time of the fd_map to the same as the time of the raster
         fd_map_temp = fd_map
-        fd_map_temp.meta['date_obs'] = map.meta['date_obs']
+        if apply_rotation:
+            fd_map_temp.meta['date_obs'] = map.meta['date_obs']
 
         # Create a WCS object for the target map
         target_wcs = fd_map_temp.wcs
