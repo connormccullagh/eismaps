@@ -104,7 +104,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         elif preserve_limb=='spherical_screen':
 
             # Apply differential rotation to the map, compared to the time of the fd_map
-            with propagate_with_solar_surface():
+            with propagate_with_solar_surface(rotation_model='howard'):
                 with SphericalScreen(map.observer_coordinate, only_off_disk=True):
                     map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
@@ -114,14 +114,14 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
             with propagate_with_solar_surface():
                 map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
-            if overlap == 'max':
-                combined_data = np.where(np.isnan(combined_data), map.data, np.nanmax([combined_data, map.data], axis=0))
-            elif overlap == 'mean':
-                combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
-            elif overlap == 'nan':
-                combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
+        if overlap == 'max':
+            combined_data = np.where(np.isnan(combined_data), map.data, np.nanmax([combined_data, map.data], axis=0))
+        elif overlap == 'mean':
+            combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
+        elif overlap == 'nan':
+            combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
 
-            overlap_mask = np.where(np.isnan(map.data), overlap_mask, overlap_mask + 1)
+        overlap_mask = np.where(np.isnan(map.data), overlap_mask, overlap_mask + 1)
 
     if overlap == 'mean':
         fd_map = sunpy.map.Map(combined_data / overlap_mask, fd_map.meta)
