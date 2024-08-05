@@ -28,6 +28,9 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     """
     Make a helioprojective full disk map from a list of maps.
     """
+    if preserve_limb == 'drag':
+        print('Warning: Dragging rasters is not yet implemented for helioprojective maps. Using spherical screen instead.')
+        preserve_limb='spherical_screen'
 
     first_map = safe_load_map(map_files[0])
     if first_map is None:
@@ -77,9 +80,11 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
 
             def differental_rotate_map_by_drag(map, point):
                 # Calculate the time difference between the map and the first map
-                map_time = datetime.strptime(map.meta['date-obs'], '%Y-%m-%dT%H:%M:%S.%f')
-                first_map_time = datetime.strptime(first_map.meta['date-obs'], '%Y-%m-%dT%H:%M:%S.%f')
+                map_time = datetime.strptime(map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+                first_map_time = datetime.strptime(first_map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
                 duration = map_time - first_map_time
+                # Convert the duration to an astropy time object
+                duration = u.Quantity(duration.total_seconds(), u.s)
                 # Rotate the point by the differential rotation
                 diffrot_point = SkyCoord(RotatedSunFrame(base=point, duration=duration))
                 transformed_diffrot_point = diffrot_point.transform_to(map.coordinate_frame)
@@ -94,12 +99,15 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
                 pass
             elif sunpy.map.contains_limb(map):  # Some of the map is off limb, so need to carefully choose the pixels to drag
                 pixel_coords = sunpy.map.all_coordinates_from_map(map)
-                distances = np.sqrt(pixel_coords.Tx ** 2 + pixel_coords.Ty ** 2)
-                closest = np.argmin(distances)
-                closest_coords = pixel_coords[closest]
+                distances = np.sqrt(pixel_coords.Tx.value ** 2 + pixel_coords.Ty.value ** 2)
+                closest_flat_index = np.argmin(distances)
+                closest_2d_index = np.unravel_index(closest_flat_index, distances.shape)
+                closest_coords = pixel_coords[closest_2d_index]
                 map = differental_rotate_map_by_drag(map, closest_coords)
             else: # This map is completely on disk, so can be shifted as normal
                 map = differental_rotate_map_by_drag(map, map.center)
+
+            ### TODO: add map data to array of same size as full disk data array, for combination below
 
         elif preserve_limb=='spherical_screen':
 
