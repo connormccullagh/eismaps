@@ -24,25 +24,16 @@ def safe_load_map(map_file):
         map = None
     return map
 
-def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=None, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
+def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
     """
     Make a helioprojective full disk map from a list of maps.
     """
-    if preserve_limb == 'drag':
-        print('Warning: Dragging rasters is depreciated for helioprojective maps. Using spherical screen instead.')
-        preserve_limb='spherical_screen'
 
     first_map = safe_load_map(map_files[0])
     if first_map is None:
         return
 
-    # fd_size = 0  # Determine the full disk grid size
-    # for file in map_files:
-    #     map = sunpy.map.Map(file)
-    #     fd_size = max(fd_size, (abs(map.meta['xcen']) + (map.meta['fovx'] / 2)) * 2)
-    #     fd_size = max(fd_size, (abs(map.meta['ycen']) + (map.meta['fovy'] / 2)) * 2)
-    # fd_size = int(fd_size * 1.05)  # Add some padding
-    fd_size = 3500  # Hardcoded
+    fd_size = 3500  # Hardcoded to avoid anomolous rasters generating incorrect huge full disk maps and crashing with memory errors
 
     map_dx = first_map.meta['cdelt1']  # Pixel sizes for the full disk image
     map_dy = first_map.meta['cdelt2']
@@ -78,55 +69,20 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
 
         if apply_rotation:
 
-            if preserve_limb=='drag':  # Manually drag rasters (and don't distort) with a custom point
-
-                def differental_rotate_map_by_drag(map, point):
-                    # Calculate the time difference between the map and the first map
-                    map_time = datetime.strptime(map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-                    first_map_time = datetime.strptime(first_map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-                    duration = map_time - first_map_time
-                    # Convert the duration to an astropy time object
-                    duration = u.Quantity(duration.total_seconds(), u.s)
-                    # Rotate the point by the differential rotation
-                    diffrot_point = SkyCoord(RotatedSunFrame(base=point, duration=duration))
-                    transformed_diffrot_point = diffrot_point.transform_to(map.coordinate_frame)
-                    # Calculate the difference between the original and transformed points
-                    shift_x = transformed_diffrot_point.Tx - point.Tx
-                    shift_y = transformed_diffrot_point.Ty - point.Ty
-                    # Shift the map by the difference
-                    map = map.shift_reference_coord(shift_x, shift_y)
-                    return map
-
-                if sunpy.map.is_all_off_disk(map):  # This map is completely off disk, and so can't be shifted
-                    pass
-                elif sunpy.map.contains_limb(map):  # Some of the map is off limb, so need to carefully choose the pixels to drag
-                    pixel_coords = sunpy.map.all_coordinates_from_map(map)
-                    distances = np.sqrt(pixel_coords.Tx.value ** 2 + pixel_coords.Ty.value ** 2)
-                    closest_flat_index = np.argmin(distances)
-                    closest_2d_index = np.unravel_index(closest_flat_index, distances.shape)
-                    closest_coords = pixel_coords[closest_2d_index]
-                    map = differental_rotate_map_by_drag(map, closest_coords)
-                else: # This map is completely on disk, so can be shifted as normal
-                    map = differental_rotate_map_by_drag(map, map.center)
-
-                ### TODO: add map data to array of same size as full disk data array, for combination below
-
-            elif preserve_limb=='spherical_screen':
-
-                # Apply differential rotation to the map, compared to the time of the fd_map
-                with propagate_with_solar_surface(rotation_model='howard'):
+            with propagate_with_solar_surface(rotation_model='howard'):
+                if preserve_limb:
                     with SphericalScreen(map.observer_coordinate, only_off_disk=True):
                         map = map.reproject_to(fd_map.wcs, algorithm='exact')
-
-            else:
-
-                # Apply differential rotation to the map, compared to the time of the fd_map
-                with propagate_with_solar_surface():
+                else:
                     map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
         else:
-            
-            map = map.reproject_to(fd_map.wcs, algorithm='exact')
+
+            if preserve_limb:
+                with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                    map = map.reproject_to(fd_map.wcs, algorithm='exact')
+            else:
+                map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
         if overlap == 'max':
             combined_data = np.where(np.isnan(combined_data), map.data, np.nanmax([combined_data, map.data], axis=0))
@@ -173,7 +129,8 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
             im = fd_map.plot(cmap='CMRmap')
             im.set_norm(plt.Normalize(vmin=0, vmax=3))
         else:
-            raise ValueError('Error: measurement is not valid')
+            print(f"Error: plotting information for this measurement is not defined in eismaps. Full disk fits file was saved, but can't plot.")
+            return
         
         fd_map.draw_limb(axes=ax, color="k")
         im = ax.get_images()
@@ -276,7 +233,8 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, a
             im = fd_map.plot(cmap='CMRmap')
             im.set_norm(plt.Normalize(vmin=0, vmax=3))
         else:
-            raise ValueError('Error: measurement is not valid')
+            print(f"Error: plotting information for this measurement is not defined in eismaps. Full disk fits file was saved, but can't plot.")
+            return
 
         im = ax.get_images()
         im_lims = im[0].get_extent()
