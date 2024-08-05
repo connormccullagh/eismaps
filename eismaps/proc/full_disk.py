@@ -45,7 +45,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         'cunit2': 'arcsec',
         'ctype1': 'HPLN-TAN',
         'ctype2': 'HPLT-TAN',
-        'date-obs': first_map.meta['date-obs'],
+        'date-obs': first_map.meta['date_obs'],
         'dsun_obs': first_map.meta['dsun_obs'],
         'hgln_obs': first_map.meta['hgln_obs'],
         'hglt_obs': first_map.meta['hglt_obs'],
