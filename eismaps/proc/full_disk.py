@@ -6,7 +6,6 @@ import astropy.units as u
 from datetime import datetime
 from sunpy.coordinates import frames
 import sunpy.map
-import eispac
 import eismaps.utils.find
 from matplotlib.colors import LogNorm
 from tqdm import tqdm
@@ -24,7 +23,7 @@ def safe_load_map(map_file):
         map = None
     return map
 
-def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
+def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a helioprojective full disk map from a list of maps.
     """
@@ -32,6 +31,26 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     first_map = safe_load_map(map_files[0])
     if first_map is None:
         return
+    
+    map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
+    output_filename = f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_hp"
+
+
+    if skip_done:
+        if os.path.exists(os.path.join(save_dir, f"{output_filename}.fits")):
+            fit_exists = True
+        else:
+            fit_exists = False
+        if save_plot and os.path.exists(os.path.join(save_dir, f"{output_filename}.{plot_ext}")):
+            plot_exists = True
+        else:
+            plot_exists = False
+        if fit_exists and save_fit and not save_plot:
+            return
+        if plot_exists and save_plot and not save_fit:
+            return
+        if fit_exists and plot_exists and save_fit and save_plot:
+            return
 
     fd_size = 3500  # Hardcoded to avoid anomolous rasters generating incorrect huge full disk maps and crashing with memory errors
 
