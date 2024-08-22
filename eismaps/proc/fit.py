@@ -36,7 +36,7 @@ def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=F
         if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in template_lines]):
             print(f"All lines in the template have already been fitted. Skipping.")
             return
-        
+
         # if all the lines_to_fit have already been fitted, skip
         if lines_to_fit != 'all':
             if all([os.path.exists(os.path.join(output_dir, f"{os.path.basename(file).split('.')[0]}.{line}.fit.h5")) for line in lines_to_fit]):

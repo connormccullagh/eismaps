@@ -23,7 +23,7 @@ def safe_load_map(map_file):
         map = None
     return map
 
-def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
+def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, drag_rotate=False, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a helioprojective full disk map from a list of maps.
     """
@@ -46,10 +46,13 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         else:
             plot_exists = False
         if fit_exists and save_fit and not save_plot:
+            print(f"Skipping {output_filename}.fits as it already exists.")
             return
         if plot_exists and save_plot and not save_fit:
+            print(f"Skipping {output_filename}.{plot_ext} as it already exists.")
             return
         if fit_exists and plot_exists and save_fit and save_plot:
+            print(f"Skipping {output_filename} as both the fits file and plot already exist.")
             return
 
     fd_size = 3500  # Hardcoded to avoid anomolous rasters generating incorrect huge full disk maps and crashing with memory errors
@@ -88,12 +91,46 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
 
         if apply_rotation:
 
-            with propagate_with_solar_surface(rotation_model='howard'):
+            if drag_rotate:
+
+                SAFE_LIMB_DIST_ARCSEC = 950
+                map_center_radial_distance = np.sqrt(map.center.Tx.value ** 2 + map.center.Ty.value ** 2)
+
+                def differental_rotate_map_by_drag(map, point):
+                    map_time = datetime.strptime(map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+                    first_map_time = datetime.strptime(first_map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+                    duration = map_time - first_map_time  # Calculate the time difference between the map and the first map
+                    duration = duration.seconds * u.second  # Convert the duration to an astropy time object
+                    diffrot_point = RotatedSunFrame(base=point, duration=duration)  # Rotate the point by the differential rotation
+                    transformed_diffrot_point = diffrot_point.transform_to(map.coordinate_frame)
+                    shift_x = transformed_diffrot_point.Tx - point.Tx  # Calculate the difference between the original and transformed points
+                    shift_y = transformed_diffrot_point.Ty - point.Ty
+                    map = map.shift_reference_coord(shift_x, shift_y)  # Shift the map by the difference
+                    return map
+
+                if map_center_radial_distance < SAFE_LIMB_DIST_ARCSEC:
+                    point = map.center  # This map center is on the disk so can be used to calculate the differential rotation
+
+                else:  # Choose a point along the line between the map center and the centre of the disk
+                    angle = np.arctan2(map.center.Tx, map.center.Ty)  # Calculate the angle between the map center and the centre of the disk
+                    point = SkyCoord(SAFE_LIMB_DIST_ARCSEC * np.sin(angle) * u.arcsec, SAFE_LIMB_DIST_ARCSEC * np.cos(angle) * u.arcsec, obstime=map.date, observer=map.observer_coordinate, frame=Helioprojective)  # Get the point at the edge of the disk along this line
+
+                map = differental_rotate_map_by_drag(map, point)  # Perform the differential rotation
+
                 if preserve_limb:
                     with SphericalScreen(map.observer_coordinate, only_off_disk=True):
-                        map = map.reproject_to(fd_map.wcs, algorithm='exact')
+                        map = map.reproject_to(fd_map.wcs, algorithm='exact')  # Add map data to array of same size as full disk data array, for combination below
                 else:
                     map = map.reproject_to(fd_map.wcs, algorithm='exact')
+
+            else:
+
+                with propagate_with_solar_surface(rotation_model='howard'):
+                    if preserve_limb:
+                        with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                            map = map.reproject_to(fd_map.wcs, algorithm='exact')
+                    else:
+                        map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
         else:
 
@@ -104,7 +141,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
                 map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
         if overlap == 'max':
-            combined_data = np.where(np.isnan(combined_data), map.data, np.nanmax([combined_data, map.data], axis=0))
+            combined_data = np.where(np.isnan(combined_data), map.data, np.where(np.isnan(map.data), combined_data, np.where(np.abs(combined_data) >= np.abs(map.data), combined_data, map.data)))
         elif overlap == 'mean':
             combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
         elif overlap == 'nan':
@@ -121,6 +158,13 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         fd_map = sunpy.map.Map(combined_data, fd_map.meta)
     else:
         fd_map = sunpy.map.Map(combined_data, fd_map.meta)
+
+    # Tidy up the off limb data if the limb should be cropped, to make sure limb is excluded
+    if not preserve_limb:
+        pixel_coords = sunpy.map.all_coordinates_from_map(fd_map)
+        limb_mask = sunpy.map.coordinate_is_on_solar_disk(pixel_coords)
+        fd_map_data = np.where(limb_mask, fd_map.data, np.nan)
+        fd_map = sunpy.map.Map(fd_map_data, fd_map.meta)
 
     if save_fit:
 
