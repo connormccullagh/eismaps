@@ -31,10 +31,9 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     first_map = safe_load_map(map_files[0])
     if first_map is None:
         return
-    
+
     map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
     output_filename = f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_hp"
-
 
     if skip_done:
         if os.path.exists(os.path.join(save_dir, f"{output_filename}.fits")):
@@ -168,8 +167,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
 
     if save_fit:
 
-        map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
-        fd_map.save(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_hp.fits"), overwrite=True)
+        fd_map.save(os.path.join(save_dir, f"{output_filename}.fits"), overwrite=True)
 
     if save_plot:
         
@@ -200,12 +198,12 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         im_lims = im[0].get_extent()
         ax.set_aspect(abs((im_lims[1]-im_lims[0])/(im_lims[3]-im_lims[2])))
         plt.colorbar(extend='both')
-        plt.savefig(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_hp.{plot_ext}"), dpi=plot_dpi)
+        plt.savefig(os.path.join(save_dir, f"{output_filename}.{plot_ext}"), dpi=plot_dpi)
         plt.close()
 
     return fd_map
 
-def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, deg_per_pix=0.1, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300):
+def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, deg_per_pix=0.1, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a Carrington full disk map from a list of maps.
     """
@@ -213,7 +211,29 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, a
     first_map = safe_load_map(map_files[0])
     if first_map is None:
         return
-    
+
+    map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
+    output_filename = f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_ca"
+
+    if skip_done:
+        if os.path.exists(os.path.join(save_dir, f"{output_filename}.fits")):
+            fit_exists = True
+        else:
+            fit_exists = False
+        if save_plot and os.path.exists(os.path.join(save_dir, f"{output_filename}.{plot_ext}")):
+            plot_exists = True
+        else:
+            plot_exists = False
+        if fit_exists and save_fit and not save_plot:
+            print(f"Skipping {output_filename}.fits as it already exists.")
+            return
+        if plot_exists and save_plot and not save_fit:
+            print(f"Skipping {output_filename}.{plot_ext} as it already exists.")
+            return
+        if fit_exists and plot_exists and save_fit and save_plot:
+            print(f"Skipping {output_filename} as both the fits file and plot already exist.")
+            return
+
     lon_pixels = int(360 / deg_per_pix)
     lat_pixels = int(180 / deg_per_pix)
     fd_lon = np.linspace(0, 360, lon_pixels) * u.deg
@@ -272,8 +292,7 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, a
 
     if save_fit:
 
-        map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
-        fd_map.save(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_ca.fits"), overwrite=True)
+        fd_map.save(os.path.join(save_dir, f"{output_filename}.fits"), overwrite=True)
 
     if save_plot:
 
@@ -303,7 +322,7 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, a
         im_lims = im[0].get_extent()
         ax.set_aspect(abs((im_lims[1]-im_lims[0])/(im_lims[3]-im_lims[2])))
         plt.colorbar(extend='both')
-        plt.savefig(os.path.join(save_dir, f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_ca.{plot_ext}"), dpi=plot_dpi)
+        plt.savefig(os.path.join(save_dir, f"{output_filename}.{plot_ext}"), dpi=plot_dpi)
         plt.close()
 
     return fd_map
