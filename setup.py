@@ -17,6 +17,7 @@ setup(
                   'and which can combine individual raster scans into full-disk maps of varying projection.'),
     url='https://github.com/jamesmckevitt/eismaps',
     packages=find_packages(),
+    include_package_data=True,  # for non-code files in MANIFEST.in
     package_data={'eismaps': ['utils/*.dat']},
     install_requires=[
         'eispac==0.96.0', # this also covers numpy, sunpy, matplotlib, etc.
