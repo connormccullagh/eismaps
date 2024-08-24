@@ -46,11 +46,11 @@ def anytim2tai(time_str):
 
 # Function for interpolating effective area (EA) values for 2023 calibration
 def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_file=FIT_EA_2023_FILE, quiet=False):
-    """
-    Interpolates the effective area (EA) curve for the specified date and wavelength using the 2023 calibration.
-    """
     if np.size(date) != 1:
         raise ValueError('ERROR: please input a single date')
+    
+    # Ensure wavelength is always treated as an array
+    wavelength = np.atleast_1d(wavelength)
     
     in_tai = anytim2tai(date)
 
@@ -98,9 +98,9 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_
     n_ref_waves = len(ref_wave)
     new_ea = np.zeros(n_ref_waves)
     for w in range(n_ref_waves):
-        ea_values = ref_ea[w,:]
+        ea_values = ref_ea[w, :]
         new_ea[w] = np.interp(in_tai, ref_tai, ea_values)
-        
+
     if not short and not long:
         out_ea = interp1d(ref_wave, new_ea, kind='cubic')(wavelength)
     else:
