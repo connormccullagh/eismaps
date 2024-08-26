@@ -22,6 +22,7 @@ setup(
     install_requires=[
         'eispac==0.96.0', # this also covers numpy, sunpy, matplotlib, etc.
         'sunkit-image==0.5.1',
+        'numpy==1.26.4', # Numpy 2.0 is not yet supported by eispac 0.96.0, so 1.26.4 is the latest version that can be used.
     ],
     classifiers=[
         # license as appropriate

@@ -25,7 +25,7 @@ def map_sd_filter(map,stds=3,log=False):
 def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, output_dir=None, output_dir_tree=False, vel_los_correct=False, skip_done=True, mssl_solarb_file_format=False):
 
     if not save_fit and not save_plot: print("No output specified. Exiting."); return False
-    VALID_MEASUREMENTS = ['int', 'vel', 'wid', 'ntv']
+    VALID_MEASUREMENTS = ['int', 'vel', 'wid', 'ntv', 'chi2']
     assert measurement is not None and any(m in VALID_MEASUREMENTS for m in measurement), f"Invalid measurement specified. Must be one of {VALID_MEASUREMENTS}."
 
     for file in files:
@@ -60,6 +60,8 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
 
             if m == 'ntv': # not an eispac default, so need eismaps
                 m_map = get_ntv_map(fit_res, component=main_component)
+            elif m == 'chi2':
+                m_map = get_chi2_map(fit_res, component=main_component)
             else:
                 m_map = fit_res.get_map(component=main_component, measurement=m)
 
@@ -152,6 +154,19 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                     else:
                         plt.savefig(output_file_png)
                     plt.close()
+                if m == 'chi2':
+                    plt.figure()
+                    m_cmap = plt.get_cmap('gray')
+                    m_cmap.set_bad(color='red')
+                    m_map.plot_settings['cmap'] = m_cmap
+                    m_map.plot()
+                    plt.colorbar(label='Chi2', extend='max')
+                    plt.clim(0, 4)
+                    if mssl_solarb_file_format:
+                      plt.savefig(output_file_gif, dpi=100)
+                    else:
+                      plt.savefig(output_file_png)
+                    plt.close()
 
     return
 
@@ -210,6 +225,17 @@ def get_ntv_map(fit_res, component=None):
 
     return map_ntv
 
-# def get_bwa_map(file):
+# def get_bwa_map(fit_res):
 #     # blue wing asymmetry
 #     return None
+
+def get_chi2_map(fit_res, component=None):
+    if component is None: component = fit_res.fit['main_component']
+
+    map_int = fit_res.get_map(component=component,measurement='int')
+
+    map_chi2 = sunpy.map.Map(fit_res.fit['chi2'], map_int.meta)
+
+    map_chi2.meta['measurement'] = 'chi2'
+    map_chi2.meta['bunit'] = 'chi2'
+    return map_chi2
