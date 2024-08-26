@@ -156,7 +156,7 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                     plt.close()
                 if m == 'chi2':
                     plt.figure()
-                    m_cmap = plt.get_cmap('gray')
+                    m_cmap = plt.get_cmap('gray').copy()
                     m_cmap.set_bad(color='red')
                     m_map.plot_settings['cmap'] = m_cmap
                     m_map.plot()
