@@ -2,8 +2,9 @@ import eispac
 import os
 import eismaps.utils.roman_numerals as roman_numerals
 from eismaps.utils.format import change_line_format
+import numpy as np
 
-def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=False, line_label=None, ncpu='max', save=True, ignore_unknown=True, output_dir=None, output_dir_tree=False):
+def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=False, line_label=None, ncpu='max', filter_chi2=None, save=True, ignore_unknown=True, output_dir=None, output_dir_tree=False):
     # Determine the output directory
     if output_dir is None:
         print('No output directory specified. Saving to the same directory as the input file.')
@@ -51,6 +52,15 @@ def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=F
 
     fit = eispac.fit_spectra(cube, template, ncpu=ncpu)
 
+    if filter_chi2 is not None:
+        # where the chi2 is greater than the filter_chi2, set the fit to np.nan
+        fit.fit['int'][fit.fit['chi2'] > filter_chi2] = np.nan
+        fit.fit['int_err'][fit.fit['chi2'] > filter_chi2] = np.nan
+        fit.fit['vel'][fit.fit['chi2'] > filter_chi2] = np.nan
+        fit.fit['vel_err'][fit.fit['chi2'] > filter_chi2] = np.nan
+        fit.fit['wid'][fit.fit['chi2'] > filter_chi2] = np.nan
+        fit.fit['wid_err'][fit.fit['chi2'] > filter_chi2] = np.nan
+
     if save:
         # Save the fit result
         saved_fits = eispac.save_fit(fit, save_dir=output_dir)
@@ -97,7 +107,7 @@ def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=F
     else:
         print(f"Fit complete but not saved.")
 
-def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, output_dir_tree=False, lock_to_window=False, list_lines_only=False):
+def batch(files, lines_to_fit='all', ncpu='max', filter_chi2=None, save=True, output_dir=None, output_dir_tree=False, lock_to_window=False, list_lines_only=False):
     all_possible_lines = []
     for file in files:  # Cycle through all the files
         wininfo = eispac.read_wininfo(file)
@@ -151,10 +161,10 @@ def batch(files, lines_to_fit='all', ncpu='max', save=True, output_dir=None, out
                 elif lock_to_window:
                     # Take the fit name from the window name
                     line_label = change_line_format(wininfo[iwin]['line_id'])
-                    fit_specific_line(file, iwin, template_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                    fit_specific_line(file, iwin, template_to_fit, lock_to_window=lock_to_window, line_label=line_label, ncpu=ncpu, filter_chi2=filter_chi2, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
                 else:
-                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, ncpu=ncpu, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
+                    fit_specific_line(file, iwin, template_to_fit, lines_to_fit=lines_to_fit, ncpu=ncpu, filter_chi2=filter_chi2, save=save, output_dir=output_dir, output_dir_tree=output_dir_tree)
 
     if list_lines_only:
         return all_possible_lines
