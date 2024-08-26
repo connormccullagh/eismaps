@@ -54,12 +54,9 @@ def fit_specific_line(file, iwin, template, lines_to_fit='all', lock_to_window=F
 
     if filter_chi2 is not None:
         # where the chi2 is greater than the filter_chi2, set the fit to np.nan
-        fit.fit['int'][fit.fit['chi2'] > filter_chi2] = np.nan
-        fit.fit['int_err'][fit.fit['chi2'] > filter_chi2] = np.nan
-        fit.fit['vel'][fit.fit['chi2'] > filter_chi2] = np.nan
-        fit.fit['vel_err'][fit.fit['chi2'] > filter_chi2] = np.nan
-        fit.fit['wid'][fit.fit['chi2'] > filter_chi2] = np.nan
-        fit.fit['wid_err'][fit.fit['chi2'] > filter_chi2] = np.nan
+        for key in fit.fit.keys():
+            if key in ['int', 'int_err', 'vel', 'vel_err', 'wid', 'wid_err']:
+                fit.fit[key][fit.fit['chi2'] > filter_chi2] = np.nan
 
     if save:
         # Save the fit result
