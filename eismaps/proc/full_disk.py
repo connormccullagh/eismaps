@@ -189,6 +189,9 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         elif measurement == 'fip':
             im = fd_map.plot(cmap='CMRmap')
             im.set_norm(plt.Normalize(vmin=0, vmax=3))
+        elif measurement == 'chi2':
+            im = fd_map.plot(cmap='gray')
+            im.set_norm(plt.Normalize(vmin=0, vmax=4))
         else:
             print(f"Error: plotting information for this measurement is not defined in eismaps. Full disk fits file was saved, but can't plot.")
             return
@@ -314,6 +317,9 @@ def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, a
         elif measurement == 'fip':
             im = fd_map.plot(cmap='CMRmap')
             im.set_norm(plt.Normalize(vmin=0, vmax=3))
+        elif measurement == 'chi2':
+            im = fd_map.plot(cmap='gray')
+            im.set_norm(plt.Normalize(vmin=0, vmax=4))
         else:
             print(f"Error: plotting information for this measurement is not defined in eismaps. Full disk fits file was saved, but can't plot.")
             return
