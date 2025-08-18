@@ -43,7 +43,7 @@ def eismaps(file_urls, source='same', local_top='data_eis', datatree=False):
         if source != 'same':
             local_path_parts = file_url.split('/')[-4:]
             local_path = '/'.join(local_path_parts)
-            file_url = soirce_url.rstrip('/') + '/' + local_path
+            file_url = source_url.rstrip('/') + '/' + local_path
 
         if datatree:
             # Extracts the date from the URL and creates the directory structure
