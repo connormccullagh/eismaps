@@ -158,14 +158,25 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         elif overlap == 'nan':
             combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
         elif overlap == 'weighted':
-            weights = compute_weight_map(map.data.shape, edge_pixels=15)  # adjust taper width if needed
+            # Compute taper weights for the tile
+            weights = compute_weight_map(map.data.shape, edge_pixels=15)  # adjust edge_pixels if needed
+        
+            # Weighted contribution of this tile
             weighted_map = map.data * weights
+        
+            # Accumulate weighted values
             combined_data = np.where(np.isnan(combined_data), weighted_map, combined_data + weighted_map)
-            overlap_mask = np.where(overlap_mask==0, weights, overlap_mask + weights)
-            continue  # skip the default overlap_mask increment below
+        
+            # Accumulate weights
+            overlap_mask = np.where(overlap_mask == 0, weights, overlap_mask + weights)
+        
+            continue  # skip the default overlap_mask increment
 
         if overlap == 'mean' or overlap == 'weighted':
-            fd_map = sunpy.map.Map(combined_data / overlap_mask, fd_map.meta)
+            fd_data = np.full_like(combined_data, np.nan)
+            valid = overlap_mask > 0
+            fd_data[valid] = combined_data[valid] / overlap_mask[valid]
+            fd_map = sunpy.map.Map(fd_data, fd_map.meta)
         elif overlap == 'mask':
             fd_map = sunpy.map.Map(overlap_mask, fd_map.meta)
         elif overlap == 'nan':
@@ -173,6 +184,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
             fd_map = sunpy.map.Map(combined_data, fd_map.meta)
         else:
             fd_map = sunpy.map.Map(combined_data, fd_map.meta)
+
 
 
     # Tidy up the off limb data if the limb should be cropped, to make sure limb is excluded
