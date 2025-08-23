@@ -148,10 +148,14 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
             overlap_mask += ~np.isnan(map.data)
         elif overlap == 'weighted':
             weights = compute_weight_map(map.data.shape, edge_pixels=15)
+            
+            # Mask for valid pixels
             valid_mask = ~np.isnan(map.data)
-            weighted_map = np.zeros_like(map.data)
-            weighted_map[valid_mask] = map.data[valid_mask] * weights[valid_mask]
-            combined_data[valid_mask] += weighted_map[valid_mask]
+            
+            # Weighted sum accumulation
+            combined_data[valid_mask] = np.nan_to_num(combined_data[valid_mask]) + map.data[valid_mask] * weights[valid_mask]
+            
+            # Accumulate weights where pixels are valid
             overlap_mask[valid_mask] += weights[valid_mask]
         else:
             combined_data = np.where(np.isnan(combined_data), map.data, map.data)
@@ -169,6 +173,12 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         fd_map = sunpy.map.Map(combined_data, fd_map.meta)
     else:
         fd_map = sunpy.map.Map(combined_data, fd_map.meta)
+    if overlap == 'weighted':
+        fd_data = np.full_like(combined_data, np.nan)
+        valid = overlap_mask > 0
+        fd_data[valid] = combined_data[valid] / overlap_mask[valid]
+        fd_map = sunpy.map.Map(fd_data, fd_map.meta)
+
 
     # --- Crop off-limb if needed ---
     if not preserve_limb:
