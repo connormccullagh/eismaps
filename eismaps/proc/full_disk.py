@@ -23,6 +23,18 @@ def safe_load_map(map_file):
         map = None
     return map
 
+def compute_weight_map(tile_shape, edge_pixels=15):
+    """
+    Returns a 2D weight map for a tile. 
+    Center pixels have weight 1, edges taper to 0 over `edge_pixels`.
+    """
+    y, x = np.indices(tile_shape)
+    center_y, center_x = (tile_shape[0]-1)/2, (tile_shape[1]-1)/2
+    dist_x = np.minimum(x, tile_shape[1]-1-x) / edge_pixels
+    dist_y = np.minimum(y, tile_shape[0]-1-y) / edge_pixels
+    weights = np.clip(np.minimum(dist_x, dist_y), 0, 1)
+    return weights
+
 def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, drag_rotate=False, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a helioprojective full disk map from a list of maps.
@@ -145,18 +157,23 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
             combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
         elif overlap == 'nan':
             combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
+        elif overlap == 'weighted':
+            weights = compute_weight_map(map.data.shape, edge_pixels=15)  # adjust taper width if needed
+            weighted_map = map.data * weights
+            combined_data = np.where(np.isnan(combined_data), weighted_map, combined_data + weighted_map)
+            overlap_mask = np.where(overlap_mask==0, weights, overlap_mask + weights)
+            continue  # skip the default overlap_mask increment below
 
-        overlap_mask = np.where(np.isnan(map.data), overlap_mask, overlap_mask + 1)
+        if overlap == 'mean' or overlap == 'weighted':
+            fd_map = sunpy.map.Map(combined_data / overlap_mask, fd_map.meta)
+        elif overlap == 'mask':
+            fd_map = sunpy.map.Map(overlap_mask, fd_map.meta)
+        elif overlap == 'nan':
+            combined_data = np.where(overlap_mask > 1, np.nan, combined_data)
+            fd_map = sunpy.map.Map(combined_data, fd_map.meta)
+        else:
+            fd_map = sunpy.map.Map(combined_data, fd_map.meta)
 
-    if overlap == 'mean':
-        fd_map = sunpy.map.Map(combined_data / overlap_mask, fd_map.meta)
-    elif overlap == 'mask':
-        fd_map = sunpy.map.Map(overlap_mask, fd_map.meta)
-    elif overlap == 'nan':
-        combined_data = np.where(overlap_mask > 1, np.nan, combined_data)
-        fd_map = sunpy.map.Map(combined_data, fd_map.meta)
-    else:
-        fd_map = sunpy.map.Map(combined_data, fd_map.meta)
 
     # Tidy up the off limb data if the limb should be cropped, to make sure limb is excluded
     if not preserve_limb:
