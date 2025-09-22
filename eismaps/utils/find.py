@@ -13,44 +13,53 @@
 #     return collected_files
 
 import os
+from datetime import datetime
 
-def main(ext, dir, unique_times=False):
+def main(ext, folder, unique_times=False, start_str=None, end_str=None):
     collected_files = []
     seen_times = set()
 
-    for root, dirs, files in os.walk(dir):
-        for file in files:
-            if file.endswith(f"{ext}"):
-                if unique_times:
-                    # Extract the timestamp from the filename
-                    time_stamp = file.split('_')[2]
-                    if time_stamp not in seen_times:
-                        collected_files.append(os.path.join(root, file))
-                        seen_times.add(time_stamp)
-                else:
-                    collected_files.append(os.path.join(root, file))
+    # Convert time range strings to datetime, if provided
+    start_dt = datetime.strptime(start_str, "%Y%m%d_%H%M%S") if start_str else None
+    end_dt   = datetime.strptime(end_str, "%Y%m%d_%H%M%S") if end_str else None
+
+    for root, _, files in os.walk(folder):
+        for fname in files:
+            if not fname.endswith(ext):
+                continue
+
+            # Extract timestamp depending on filename pattern
+            ts_str = None
+            if fname.startswith("eis_"):  
+                # eis_20230101_120000.ext
+                ts_str = fname[4:].split('.')[0]
+            else:  
+                # generic pattern: something_something_TIMESTAMP.ext
+                parts = fname.split('_')
+                if len(parts) > 2:
+                    ts_str = parts[2].split('.')[0]
+
+            file_dt = None
+            if ts_str:
+                try:
+                    file_dt = datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
+                except ValueError:
+                    pass
+
+            # Apply unique timestamp filter
+            if unique_times and ts_str:
+                if ts_str in seen_times:
+                    continue
+                seen_times.add(ts_str)
+
+            # Apply time range filter
+            if file_dt:
+                if start_dt and file_dt < start_dt:
+                    continue
+                if end_dt and file_dt > end_dt:
+                    continue
+
+            collected_files.append(os.path.join(root, fname))
 
     collected_files.sort()
     return collected_files
-    
-def find_files_in_range(ext, folder, start_str, end_str):
-    from datetime import datetime
-    import datetime as dt
-    import os
-    
-    start_dt = datetime.strptime(start_str, "%Y%m%d_%H%M%S")
-    end_dt   = datetime.strptime(end_str, "%Y%m%d_%H%M%S")
-    files_in_range = []
-
-    for fname in os.listdir(folder):
-        if fname.startswith('eis_') and fname.endswith(ext):
-            ts_str = fname[4:].split('.')[0]
-            try:
-                file_dt = datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
-            except ValueError:
-                continue
-            if start_dt <= file_dt <= end_dt:
-                files_in_range.append(os.path.join(folder, fname))
-
-    files_in_range.sort()
-    return files_in_range
