@@ -72,3 +72,34 @@ def eismaps(file_urls, source='same', local_top='data_eis', datatree=False):
         else:
             print(f"{filename} already exists in {target_dir}. Skipping download.")
     return [target_path for file_url in file_urls]
+
+def download_data(start_str, end_str, DATA_SOURCE='mssl',INPUT_DIR='input_eis_data'):
+    
+    import eismaps.data.search as em_search
+    from datetime import datetime
+    import datetime as dt
+    import os
+
+
+    '''
+    start_str and end_str should be provided in the format YYYYMMDD_HHMMSS
+    DATA_SOURCE can be either 'mssl' or 'nrl'
+    INPUT_DIR is file for downloaded data to be saved to
+    '''
+    
+    start_dt = datetime.strptime(start_str, "%Y%m%d_%H%M%S")
+    end_dt   = datetime.strptime(end_str, "%Y%m%d_%H%M%S")
+    
+    # Get all available file URLs in range
+    file_urls = em_search.main(start_dt, end_dt, source=DATA_SOURCE)
+    print(f"Found {len(file_urls)} files. Downloading missing ones...")
+    
+    # Ensure local directory exists
+    if not os.path.exists(INPUT_DIR):
+        os.makedirs(INPUT_DIR)
+    
+    # Use eismaps() to handle downloads
+    downloaded_files = eismaps(file_urls, source=DATA_SOURCE, local_top=INPUT_DIR, datatree=False)
+    
+    print(f"Download complete. {len(downloaded_files)} files downloaded.")
+    return downloaded_files
