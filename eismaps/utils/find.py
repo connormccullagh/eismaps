@@ -25,10 +25,10 @@ def main(ext, folder, chosen_wavelength = None, unique_times=False, start_str=No
 
     if chosen_wavelength:
         # Split integer and decimal part
-        int_part = int(chosen_wavelength)           # 195
-        dec_part = int(round((chosen_wavelength % 1) * 1000))  # 119
+        int_part = int(chosen_wavelength)           
+        dec_part = int(round((chosen_wavelength % 1) * 1000))  
         
-        line_str = f"fe_12_{int_part}_{dec_part}"   # fe_12_195_119
+        line_str = f"{int_part}_{dec_part}" 
 
     for root, _, files in os.walk(folder):
         for fname in files:
