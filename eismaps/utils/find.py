@@ -15,13 +15,20 @@
 import os
 from datetime import datetime
 
-def main(ext, folder, unique_times=False, start_str=None, end_str=None):
+def main(ext, folder, chosen_wavelength = None, unique_times=False, start_str=None, end_str=None):
     collected_files = []
     seen_times = set()
 
     # Convert time range strings to datetime, if provided
     start_dt = datetime.strptime(start_str, "%Y%m%d_%H%M%S") if start_str else None
     end_dt   = datetime.strptime(end_str, "%Y%m%d_%H%M%S") if end_str else None
+
+    if chosen_wavelength:
+        # Split integer and decimal part
+        int_part = int(chosen_wavelength)           # 195
+        dec_part = int(round((chosen_wavelength % 1) * 1000))  # 119
+        
+        line_str = f"fe_12_{int_part}_{dec_part}"   # fe_12_195_119
 
     for root, _, files in os.walk(folder):
         for fname in files:
@@ -57,6 +64,10 @@ def main(ext, folder, unique_times=False, start_str=None, end_str=None):
                 if start_dt and file_dt < start_dt:
                     continue
                 if end_dt and file_dt > end_dt:
+                    continue
+
+            if chosen_wavelength != None:
+                if line_str not in fname:
                     continue
 
             collected_files.append(os.path.join(root, fname))
