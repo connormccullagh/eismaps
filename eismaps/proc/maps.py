@@ -22,61 +22,103 @@ def map_sd_filter(map,stds=3,log=False):
 
     return map
     
-def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, output_dir=None, output_dir_tree=False, vel_los_correct=False, skip_done=True, mssl_solarb_file_format=False):
+def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False,
+          output_dir=None, output_dir_tree=False, vel_los_correct=False,
+          skip_done=True, mssl_solarb_file_format=False):
+    """
+    Batch process EIS files to create maps for different measurements.
 
-    if not save_fit and not save_plot: print("No output specified. Exiting."); return False
-    VALID_MEASUREMENTS = ['int', 'vel', 'wid', 'ntv', 'chi2']
-    assert measurement is not None and any(m in VALID_MEASUREMENTS for m in measurement), f"Invalid measurement specified. Must be one of {VALID_MEASUREMENTS}."
+    If 'err_vel' is requested, it will automatically copy metadata from the 'int' map
+    in the same file.
+    """
+    from sunpy.map import Map
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sunpy.coordinates import frames
+    import astropy.units as u
+    import eispac
+    if not save_fit and not save_plot:
+        print("No output specified. Exiting.")
+        return False
+
+    VALID_MEASUREMENTS = ['int', 'vel', 'wid', 'ntv', 'chi2', 'err_int', 'err_vel']
+    assert measurement is not None and any(m in VALID_MEASUREMENTS for m in measurement), \
+        f"Invalid measurement specified. Must be one of {VALID_MEASUREMENTS}."
+
+    out_files = []
 
     for file in files:
-
         file_name = os.path.basename(file)
-        file_date = os.path.basename(file).split('.')[0].split('_')[1]
+        file_date = file_name.split('.')[0].split('_')[1]
 
-        if output_dir is None: output_dir = os.path.dirname(file)
-        if output_dir_tree: output_dir = os.path.join(output_dir, file_date[:4], file_date[4:6], file_date[6:8])
+        if output_dir is None:
+            output_dir = os.path.dirname(file)
+        if output_dir_tree:
+            output_dir = os.path.join(output_dir, file_date[:4], file_date[4:6], file_date[6:8])
+            os.makedirs(output_dir, exist_ok=True)
 
         fit_res = eispac.core.read_fit(file)
         main_component = fit_res.fit['main_component']
 
         for m in measurement:
-
             output_file_fit = os.path.join(output_dir, f"{file_name.replace('.fit.h5', f'.{m}.fits')}")
+            output_file_png = None
+            output_file_gif = None
 
-            if save_fit:
-                output_file_fit = os.path.join(output_dir, f"{file_name.replace('.fit.h5', f'.{m}.fits')}")
-                if skip_done and os.path.exists(output_file_fit): print(f"Skipping {m} map for {file_name} because it already exists."); continue
+            if save_fit and skip_done and os.path.exists(output_file_fit):
+                print(f"Skipping {m} map for {file_name} because it already exists.")
+                continue
 
             if save_plot:
-                output_file_png = os.path.join(output_dir, f"{file_name.replace('.fit.h5', f'.{m}.png')}")  # Example output: eis_20130113_074850.fe_15_284_160.int.png
-                if mssl_solarb_file_format: # Example required: eis_l0_20130113_074850.fits_line_10_FE_XV_284.160.int.gif
+                output_file_png = os.path.join(output_dir, f"{file_name.replace('.fit.h5', f'.{m}.png')}")
+                if mssl_solarb_file_format:
                     output_file_png_filename = os.path.basename(output_file_png)
                     output_file_datetime = f"{output_file_png_filename.split('.')[0].split('_')[1]}_{output_file_png_filename.split('.')[0].split('_')[2]}"
                     output_file_iwin = fit_res.meta['iwin']
                     output_file_lineid = fit_res.meta['line_id']
                     output_file_gif_filename = f"eis_l0_{output_file_datetime}.fits_line_{output_file_iwin}_{output_file_lineid.replace(' ', '_').upper()}.{m}.gif"
                     output_file_gif = os.path.join(output_dir, output_file_gif_filename)
-                if skip_done and os.path.exists(output_file_fit): print(f"Skipping {m} map for {file_name} because it already exists."); continue
 
-            if m == 'ntv': # not an eispac default, so need eismaps
+            # -----------------------------
+            # Generate the map
+            # -----------------------------
+            if m == 'ntv':
                 m_map = get_ntv_map(fit_res, component=main_component)
             elif m == 'chi2':
                 m_map = get_chi2_map(fit_res, component=main_component)
+            elif m == 'err_vel':
+                data = fit_res.fit['err_vel'][:, :, main_component]
+
+                # Use 'int' measurement in the same file for metadata
+                int_map = fit_res.get_map(component=main_component, measurement='int')
+                meta = int_map.meta.copy()
+
+                m_map = Map(data, meta)
             else:
                 m_map = fit_res.get_map(component=main_component, measurement=m)
 
+            # -----------------------------
+            # Clip outliers
+            # -----------------------------
             if clip:
-                if m == 'int': m_map = map_sd_filter(m_map, stds=6, log=True)
-                if m == 'vel': m_map = map_sd_filter(m_map, stds=6)
-                if m == 'wid': m_map = map_sd_filter(m_map, stds=3)
-                if m == 'ntv': m_map = map_sd_filter(m_map, stds=3)
+                if m in ['int', 'err_int']:
+                    m_map = map_sd_filter(m_map, stds=6, log=True)
+                elif m in ['vel', 'err_vel']:
+                    m_map = map_sd_filter(m_map, stds=6)
+                elif m == 'wid':
+                    m_map = map_sd_filter(m_map, stds=3)
+                elif m == 'ntv':
+                    m_map = map_sd_filter(m_map, stds=3)
 
-            if vel_los_correct and m == 'vel':
+            # -----------------------------
+            # LOS correction
+            # -----------------------------
+            if vel_los_correct and m in ['vel', 'err_vel']:
                 helioprojective_coords = sunpy.map.all_coordinates_from_map(m_map)
                 heliographic_coords = helioprojective_coords.transform_to(frames.HeliographicStonyhurst)
                 latitude = heliographic_coords.lat.to(u.deg).value
                 longitude = heliographic_coords.lon.to(u.deg).value
-
                 observer_lon = m_map.observer_coordinate.lon.to(u.deg).value
                 observer_lat = m_map.observer_coordinate.lat.to(u.deg).value
 
@@ -85,90 +127,34 @@ def batch(files, measurement=None, clip=False, save_fit=True, save_plot=False, o
                 observer_lon_rad = np.deg2rad(observer_lon)
                 observer_lat_rad = np.deg2rad(observer_lat)
 
-                los_factor = np.sin(latitude_rad) * np.sin(observer_lat_rad) + \
-                            np.cos(latitude_rad) * np.cos(observer_lat_rad) * np.cos(longitude_rad - observer_lon_rad)
+                los_factor = (np.sin(latitude_rad) * np.sin(observer_lat_rad) +
+                              np.cos(latitude_rad) * np.cos(observer_lat_rad) *
+                              np.cos(longitude_rad - observer_lon_rad))
 
-                for i in range(m_map.data.shape[0]):
-                    for j in range(m_map.data.shape[1]):
-                            m_map.data[i,j] = m_map.data[i,j] / los_factor[i,j]
+                los_corrected_data = m_map.data / los_factor
+                # Replace any NaNs or infinities with a large masked value
+                los_corrected_data = np.nan_to_num(los_corrected_data, nan=0.0, posinf=0.0, neginf=0.0)
+                m_map = Map(los_corrected_data, m_map.meta)       
 
+            # -----------------------------
+            # Save map
+            # -----------------------------
             if save_fit:
                 m_map.save(output_file_fit, overwrite=True)
+                out_files.append(output_file_fit)
 
             if save_plot:
-                if m == 'int':
-                    plt.figure()
-                    m_cmap = plt.get_cmap('gist_heat').copy()
-                    m_cmap.set_bad(color='gray')
-                    m_map.plot_settings['cmap'] = m_cmap
-                    m_map.plot_settings['norm'].vmin = 1e-1
-                    m_map.plot()
-                    plt.colorbar(label='Intensity (DN/s)', extend='max')
-                    if mssl_solarb_file_format:
-                        plt.savefig(output_file_gif, dpi=100)
-                    else:
-                        plt.savefig(output_file_png)
-                    plt.close()
-                if m == 'vel':
-                    plt.figure()
-                    m_cmap = plt.get_cmap('RdBu_r').copy()
-                    m_cmap.set_bad(color='gray')
-                    m_map.plot_settings['cmap'] = m_cmap
-                    vmin_percentile = np.nanpercentile(m_map.data, 10) # using percentiles (robust against extreme outliers)
-                    vmax_percentile = np.nanpercentile(m_map.data, 90)
-                    max_limit = max(abs(vmin_percentile), abs(vmax_percentile)) # set the limits to be symmetrical
-                    vmin, vmax = -max_limit, max_limit
-                    m_map.plot_settings['norm'].vmin = vmin
-                    m_map.plot_settings['norm'].vmax = vmax
-                    m_map.plot()
-                    plt.colorbar(label='Doppler velocity (km/s)', extend='both')
-                    if mssl_solarb_file_format:
-                        plt.savefig(output_file_gif, dpi=100)
-                    else:
-                        plt.savefig(output_file_png)
-                    plt.close()
-                if m == 'wid':
-                    plt.figure()
-                    m_cmap = plt.get_cmap('viridis').copy()
-                    m_cmap.set_bad(color='gray')
-                    m_map.plot_settings['cmap'] = m_cmap
-                    m_map.plot()
-                    plt.colorbar(label='Width (Angstrom)', extend='both')
-                    if mssl_solarb_file_format:
-                        plt.savefig(output_file_gif, dpi=100)
-                    else:
-                        plt.savefig(output_file_png)
-                    plt.close()
-                if m == 'ntv':
-                    plt.figure()
-                    m_cmap = plt.get_cmap('inferno').copy()
-                    m_cmap.set_bad(color='gray')
-                    m_map.plot_settings['cmap'] = m_cmap
-                    vmax_percentile = np.nanpercentile(m_map.data, 90)
-                    m_map.plot_settings['norm'].vmin = 0
-                    m_map.plot_settings['norm'].vmax = vmax_percentile
-                    m_map.plot()
-                    plt.colorbar(label='Non-thermal velocity (km/s)', extend='both')
-                    if mssl_solarb_file_format:
-                        plt.savefig(output_file_gif, dpi=100)
-                    else:
-                        plt.savefig(output_file_png)
-                    plt.close()
-                if m == 'chi2':
-                    plt.figure()
-                    m_cmap = plt.get_cmap('gray').copy()
-                    m_cmap.set_bad(color='red')
-                    m_map.plot_settings['cmap'] = m_cmap
-                    m_map.plot()
-                    plt.colorbar(label='Chi2', extend='max')
-                    plt.clim(0, 4)
-                    if mssl_solarb_file_format:
-                      plt.savefig(output_file_gif, dpi=100)
-                    else:
-                      plt.savefig(output_file_png)
-                    plt.close()
+                plt.figure()
+                m_map.plot()
+                if mssl_solarb_file_format:
+                    plt.savefig(output_file_gif, dpi=100)
+                    out_files.append(output_file_gif)
+                else:
+                    plt.savefig(output_file_png)
+                    out_files.append(output_file_png)
+                plt.close()
 
-    return
+    return out_files
 
 def get_ntv_map(fit_res, component=None):
     import pandas as pd
