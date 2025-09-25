@@ -23,25 +23,11 @@ def safe_load_map(map_file):
         map = None
     return map
 
-def compute_weight_map(tile_shape, edge_pixels=15):
-    """
-    Returns a 2D weight map for a tile. 
-    Center pixels have weight 1, edges taper to 0 over `edge_pixels`.
-    """
-    y, x = np.indices(tile_shape)
-    center_y, center_x = (tile_shape[0]-1)/2, (tile_shape[1]-1)/2
-    dist_x = np.minimum(x, tile_shape[1]-1-x) / edge_pixels
-    dist_y = np.minimum(y, tile_shape[0]-1-y) / edge_pixels
-    weights = np.clip(np.minimum(dist_x, dist_y), 0, 1)
-    return weights
-
-def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap,
-                             apply_rotation=True, preserve_limb=True, drag_rotate=False,
-                             save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300,
-                             skip_done=True):
+def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, drag_rotate=False, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a helioprojective full disk map from a list of maps.
     """
+
     first_map = safe_load_map(map_files[0])
     if first_map is None:
         return
@@ -49,10 +35,15 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     map_file_datetime = os.path.basename(map_files[0]).split('.')[0].replace('eis_', '')
     output_filename = f"eis_{map_file_datetime}.{wavelength}.{measurement}.fd_hp"
 
-    # Skip if files already exist
     if skip_done:
-        fit_exists = os.path.exists(os.path.join(save_dir, f"{output_filename}.fits"))
-        plot_exists = save_plot and os.path.exists(os.path.join(save_dir, f"{output_filename}.{plot_ext}"))
+        if os.path.exists(os.path.join(save_dir, f"{output_filename}.fits")):
+            fit_exists = True
+        else:
+            fit_exists = False
+        if save_plot and os.path.exists(os.path.join(save_dir, f"{output_filename}.{plot_ext}")):
+            plot_exists = True
+        else:
+            plot_exists = False
         if fit_exists and save_fit and not save_plot:
             print(f"Skipping {output_filename}.fits as it already exists.")
             return
@@ -63,9 +54,9 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
             print(f"Skipping {output_filename} as both the fits file and plot already exist.")
             return
 
-    # Full disk map setup
-    fd_size = 3500
-    map_dx = first_map.meta['cdelt1']
+    fd_size = 3500  # Hardcoded to avoid anomolous rasters generating incorrect huge full disk maps and crashing with memory errors
+
+    map_dx = first_map.meta['cdelt1']  # Pixel sizes for the full disk image
     map_dy = first_map.meta['cdelt2']
     fd_width = round(fd_size / map_dx)
     fd_height = round(fd_size / map_dy)
@@ -90,82 +81,75 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
     fd_data = np.full((fd_height, fd_width), np.nan)
     fd_map = sunpy.map.Map(fd_data, fd_header)
 
-    combined_data = np.full((fd_height, fd_width), np.nan)
     overlap_mask = np.zeros((fd_height, fd_width))
-
-    SAFE_LIMB_DIST_ARCSEC = 950
+    combined_data = np.full((fd_height, fd_width), np.nan)
 
     for map_file in map_files:
 
         map = sunpy.map.Map(map_file)
 
-        # --- Rotation handling ---
-        if apply_rotation and drag_rotate:
+        if apply_rotation:
 
-            map_center_radial_distance = np.sqrt(map.center.Tx.value**2 + map.center.Ty.value**2)
+            if drag_rotate:
 
-            def differental_rotate_map_by_drag(map, point):
-                map_time = datetime.strptime(map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-                first_map_time = datetime.strptime(first_map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
-                duration = (map_time - first_map_time).seconds * u.second
-                diffrot_point = RotatedSunFrame(base=point, duration=duration)
-                transformed_diffrot_point = diffrot_point.transform_to(map.coordinate_frame)
-                shift_x = transformed_diffrot_point.Tx - point.Tx
-                shift_y = transformed_diffrot_point.Ty - point.Ty
-                return map.shift_reference_coord(shift_x, shift_y)
+                SAFE_LIMB_DIST_ARCSEC = 950
+                map_center_radial_distance = np.sqrt(map.center.Tx.value ** 2 + map.center.Ty.value ** 2)
 
-            if map_center_radial_distance < SAFE_LIMB_DIST_ARCSEC:
-                point = map.center
+                def differental_rotate_map_by_drag(map, point):
+                    map_time = datetime.strptime(map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+                    first_map_time = datetime.strptime(first_map.meta['date_obs'], '%Y-%m-%dT%H:%M:%S.%f')
+                    duration = map_time - first_map_time  # Calculate the time difference between the map and the first map
+                    duration = duration.seconds * u.second  # Convert the duration to an astropy time object
+                    diffrot_point = RotatedSunFrame(base=point, duration=duration)  # Rotate the point by the differential rotation
+                    transformed_diffrot_point = diffrot_point.transform_to(map.coordinate_frame)
+                    shift_x = transformed_diffrot_point.Tx - point.Tx  # Calculate the difference between the original and transformed points
+                    shift_y = transformed_diffrot_point.Ty - point.Ty
+                    map = map.shift_reference_coord(shift_x, shift_y)  # Shift the map by the difference
+                    return map
+
+                if map_center_radial_distance < SAFE_LIMB_DIST_ARCSEC:
+                    point = map.center  # This map center is on the disk so can be used to calculate the differential rotation
+
+                else:  # Choose a point along the line between the map center and the centre of the disk
+                    angle = np.arctan2(map.center.Tx, map.center.Ty)  # Calculate the angle between the map center and the centre of the disk
+                    point = SkyCoord(SAFE_LIMB_DIST_ARCSEC * np.sin(angle) * u.arcsec, SAFE_LIMB_DIST_ARCSEC * np.cos(angle) * u.arcsec, obstime=map.date, observer=map.observer_coordinate, frame=Helioprojective)  # Get the point at the edge of the disk along this line
+
+                map = differental_rotate_map_by_drag(map, point)  # Perform the differential rotation
+
+                if preserve_limb:
+                    with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                        map = map.reproject_to(fd_map.wcs, algorithm='exact')  # Add map data to array of same size as full disk data array, for combination below
+                else:
+                    map = map.reproject_to(fd_map.wcs, algorithm='exact')
+
             else:
-                angle = np.arctan2(map.center.Tx, map.center.Ty)
-                point = SkyCoord(SAFE_LIMB_DIST_ARCSEC*np.sin(angle)*u.arcsec,
-                                 SAFE_LIMB_DIST_ARCSEC*np.cos(angle)*u.arcsec,
-                                 obstime=map.date,
-                                 observer=map.observer_coordinate,
-                                 frame=Helioprojective)
-            map = differental_rotate_map_by_drag(map, point)
 
-        # --- Reproject ---
-        if preserve_limb:
-            with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                with propagate_with_solar_surface(rotation_model='howard'):
+                    if preserve_limb:
+                        with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                            map = map.reproject_to(fd_map.wcs, algorithm='exact')
+                    else:
+                        map = map.reproject_to(fd_map.wcs, algorithm='exact')
+
+        else:
+
+            if preserve_limb:
+                with SphericalScreen(map.observer_coordinate, only_off_disk=True):
+                    map = map.reproject_to(fd_map.wcs, algorithm='exact')
+            else:
                 map = map.reproject_to(fd_map.wcs, algorithm='exact')
-        else:
-            map = map.reproject_to(fd_map.wcs, algorithm='exact')
 
-        # --- Overlap handling ---
         if overlap == 'max':
-            combined_data = np.where(np.isnan(combined_data), map.data,
-                                     np.where(np.isnan(map.data), combined_data,
-                                              np.where(np.abs(combined_data) >= np.abs(map.data),
-                                                       combined_data, map.data)))
+            combined_data = np.where(np.isnan(combined_data), map.data, np.where(np.isnan(map.data), combined_data, np.where(np.abs(combined_data) >= np.abs(map.data), combined_data, map.data)))
         elif overlap == 'mean':
-            combined_data = np.where(np.isnan(combined_data), map.data,
-                                     np.nansum([combined_data, map.data], axis=0))
-            overlap_mask += ~np.isnan(map.data)
+            combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
         elif overlap == 'nan':
-            combined_data = np.where(np.isnan(combined_data), map.data,
-                                     np.nansum([combined_data, map.data], axis=0))
-            overlap_mask += ~np.isnan(map.data)
-        elif overlap == 'weighted':
-            weights = compute_weight_map(map.data.shape, edge_pixels=15)
-            
-            # Mask for valid pixels
-            valid_mask = ~np.isnan(map.data)
-            
-            # Weighted sum accumulation
-            combined_data[valid_mask] = np.nan_to_num(combined_data[valid_mask]) + map.data[valid_mask] * weights[valid_mask]
-            
-            # Accumulate weights where pixels are valid
-            overlap_mask[valid_mask] += weights[valid_mask]
-        else:
-            combined_data = np.where(np.isnan(combined_data), map.data, map.data)
+            combined_data = np.where(np.isnan(combined_data), map.data, np.nansum([combined_data, map.data], axis=0))
 
-    # --- Normalize after loop ---
-    if overlap in ['mean', 'weighted']:
-        fd_data = np.full_like(combined_data, np.nan)
-        valid = overlap_mask > 0
-        fd_data[valid] = combined_data[valid] / overlap_mask[valid]
-        fd_map = sunpy.map.Map(fd_data, fd_map.meta)
+        overlap_mask = np.where(np.isnan(map.data), overlap_mask, overlap_mask + 1)
+
+    if overlap == 'mean':
+        fd_map = sunpy.map.Map(combined_data / overlap_mask, fd_map.meta)
     elif overlap == 'mask':
         fd_map = sunpy.map.Map(overlap_mask, fd_map.meta)
     elif overlap == 'nan':
@@ -173,29 +157,23 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         fd_map = sunpy.map.Map(combined_data, fd_map.meta)
     else:
         fd_map = sunpy.map.Map(combined_data, fd_map.meta)
-    if overlap == 'weighted':
-        fd_data = np.full_like(combined_data, np.nan)
-        valid = overlap_mask > 0
-        fd_data[valid] = combined_data[valid] / overlap_mask[valid]
-        fd_map = sunpy.map.Map(fd_data, fd_map.meta)
 
-
-    # --- Crop off-limb if needed ---
+    # Tidy up the off limb data if the limb should be cropped, to make sure limb is excluded
     if not preserve_limb:
         pixel_coords = sunpy.map.all_coordinates_from_map(fd_map)
         limb_mask = sunpy.map.coordinate_is_on_solar_disk(pixel_coords)
         fd_map_data = np.where(limb_mask, fd_map.data, np.nan)
         fd_map = sunpy.map.Map(fd_map_data, fd_map.meta)
 
-    # --- Save FITS ---
     if save_fit:
+
         fd_map.save(os.path.join(save_dir, f"{output_filename}.fits"), overwrite=True)
 
-    # --- Plot ---
     if save_plot:
+        
         fig = plt.figure()
         ax = plt.subplot(projection=fd_map)
-
+        
         if measurement == 'int':
             fd_map.plot_settings['norm'] = LogNorm(vmin=1e1, vmax=5e3)
             im = fd_map.plot(cmap='gist_heat')
@@ -217,11 +195,11 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         else:
             print(f"Error: plotting information for this measurement is not defined in eismaps. Full disk fits file was saved, but can't plot.")
             return
-
+        
         fd_map.draw_limb(axes=ax, color="k")
         im = ax.get_images()
         im_lims = im[0].get_extent()
-        ax.set_aspect(abs((im_lims[1]-im_lims[0]) / (im_lims[3]-im_lims[2])))
+        ax.set_aspect(abs((im_lims[1]-im_lims[0])/(im_lims[3]-im_lims[2])))
         plt.colorbar(extend='both')
         plt.savefig(os.path.join(save_dir, f"{output_filename}.{plot_ext}"), dpi=plot_dpi)
         plt.close()
