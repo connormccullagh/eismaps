@@ -23,6 +23,7 @@ def safe_load_map(map_file):
         map = None
     return map
 
+
 def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, preserve_limb=True, drag_rotate=False, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a helioprojective full disk map from a list of maps.
