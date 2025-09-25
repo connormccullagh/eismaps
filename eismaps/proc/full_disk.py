@@ -205,7 +205,7 @@ def make_helioprojective_map(map_files, save_dir, wavelength, measurement, overl
         plt.close()
 
     return fd_map
-
+    
 def make_carrington_map(map_files, save_dir, wavelength, measurement, overlap, apply_rotation=True, deg_per_pix=0.1, save_fit=False, save_plot=False, plot_ext='png', plot_dpi=300, skip_done=True):
     """
     Make a Carrington full disk map from a list of maps.
